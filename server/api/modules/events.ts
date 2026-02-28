@@ -16,9 +16,33 @@ function toDate(value: string) {
   return parsed;
 }
 
+const eventCreateSchema = t.Object({
+  title: t.String(),
+  tagline: t.Optional(t.String()),
+  description: t.String(),
+  slug: t.String(),
+  startDate: t.String(),
+  endDate: t.String(),
+  location: t.String(),
+  city: t.Optional(t.String()),
+  contactEmail: t.Optional(t.String()),
+  posterImage: t.Optional(t.String()),
+  organizerId: t.Optional(t.String()),
+  creatorId: t.Optional(t.String()),
+  prices: t.Optional(t.Array(t.Object({
+    name: t.String(),
+    price: t.Number(),
+    seats: t.Optional(t.Number()),
+  }))),
+  totalTickets: t.Optional(t.Number()),
+  genre: t.Optional(t.Array(t.String())),
+});
+
+const eventUpdateSchema = t.Partial(eventCreateSchema);
+
 export const eventsRoutes = new Elysia({ prefix: "/events" })
   .get("/", async () =>
-    db.event.findMany({
+    prisma.event.findMany({
       orderBy: { startDate: "asc" },
       include: { organizer: true },
     }),
@@ -26,7 +50,7 @@ export const eventsRoutes = new Elysia({ prefix: "/events" })
   .get(
     "/:slug",
     async ({ params, set }) => {
-      const event = await db.event.findUnique({
+      const event = await prisma.event.findUnique({
         where: { slug: params.slug },
         include: { organizer: true },
       });
@@ -126,7 +150,7 @@ export const eventsRoutes = new Elysia({ prefix: "/events" })
       }
 
       try {
-        const event = await db.event.update({
+        const event = await prisma.event.update({
           where: { id: params.id },
           data,
           include: { organizer: true },
@@ -156,7 +180,7 @@ export const eventsRoutes = new Elysia({ prefix: "/events" })
     "/:id",
     async ({ params, set }) => {
       try {
-        await db.event.delete({ where: { id: params.id } });
+        await prisma.event.delete({ where: { id: params.id } });
         return { ok: true };
       } catch (error: unknown) {
         if (

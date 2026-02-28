@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { signOut, useSession } from "@/lib/auth-client";
 
@@ -80,10 +81,6 @@ function formatWhen(iso: string) {
   }).format(d);
 }
 
-function uid() {
-  return Math.random().toString(16).slice(2) + Date.now().toString(16);
-}
-
 function toLocalInputValue(iso: string) {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return "";
@@ -106,16 +103,13 @@ async function makeQrDataUrl(value: string) {
 export default function SettingsPage() {
   const { data } = useSession();
 
-  const [tab, setTab] = React.useState<
-    "profile" | "tickets" | "security" | "events"
-  >("profile");
   const [saved, setSaved] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
 
   const [displayName, setDisplayName] = React.useState(data?.user?.name ?? "");
   const [email, setEmail] = React.useState(data?.user?.email ?? "");
   const [handle, setHandle] = React.useState(
-    (data?.user?.email ?? "user").split("@")[0] ?? "user"
+    (data?.user?.email ?? "user").split("@")[0] ?? "user",
   );
   const [bio, setBio] = React.useState("");
   const [avatarFile, setAvatarFile] = React.useState<File | null>(null);
@@ -162,7 +156,8 @@ export default function SettingsPage() {
       })
       .catch((err: unknown) => {
         if (!active) return;
-        const message = err instanceof Error ? err.message : "Failed to load tickets";
+        const message =
+          err instanceof Error ? err.message : "Failed to load tickets";
         setTicketsError(message);
       })
       .finally(() => {
@@ -199,7 +194,8 @@ export default function SettingsPage() {
       })
       .catch((err: unknown) => {
         if (!active) return;
-        const message = err instanceof Error ? err.message : "Failed to load events";
+        const message =
+          err instanceof Error ? err.message : "Failed to load events";
         setEventsError(message);
       })
       .finally(() => {
@@ -256,7 +252,7 @@ export default function SettingsPage() {
 
     const updated = (await res.json()) as TicketApiItem;
     setTickets((prev) =>
-      prev.map((t) => (t.id === updated.id ? normalizeTicket(updated) : t))
+      prev.map((t) => (t.id === updated.id ? normalizeTicket(updated) : t)),
     );
   }
 
@@ -297,7 +293,7 @@ export default function SettingsPage() {
 
     const updated = (await res.json()) as EventApiItem;
     setEvents((prev) =>
-      prev.map((e) => (e.id === updated.id ? normalizeEvent(updated) : e))
+      prev.map((e) => (e.id === updated.id ? normalizeEvent(updated) : e)),
     );
   }
 
@@ -320,7 +316,6 @@ export default function SettingsPage() {
     setSaved(false);
     try {
       await new Promise((r) => setTimeout(r, 500));
-      // Wire to DB update later.
       setSaved(true);
       setTimeout(() => setSaved(false), 1800);
     } finally {
@@ -329,124 +324,86 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-6xl">
-      <div className="relative overflow-hidden rounded-3xl border bg-background">
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 opacity-[0.55]"
-          style={{
-            background:
-              "radial-gradient(980px 540px at 12% 12%, oklch(0.93 0.06 30 / .9), transparent 60%), radial-gradient(900px 540px at 92% 18%, oklch(0.92 0.05 215 / .85), transparent 58%), radial-gradient(900px 620px at 55% 120%, oklch(0.95 0.04 95 / .9), transparent 55%)",
-          }}
-        />
+    <div className="mx-auto w-full max-w-5xl px-4 py-10">
+      <div className="space-y-1 mb-8">
+        <h1 className="text-2xl font-semibold tracking-tight">Account</h1>
+        <p className="text-sm text-muted-foreground">
+          Customize your profile and access tickets with entry QR.
+        </p>
+      </div>
 
-        <div className="relative p-6 sm:p-10">
-          <div className="flex flex-col gap-2">
-            <p className="text-xs text-muted-foreground">
-              <span className="rounded-full border bg-background/70 px-3 py-1 font-mono">
-                Settings
-              </span>
-            </p>
-            <h1 className="text-balance text-2xl font-semibold tracking-tight sm:text-3xl">
-              Account
-            </h1>
-            <p className="max-w-2xl text-sm text-muted-foreground">
-              Customize your profile and access tickets with entry QR.
-            </p>
+      <Tabs defaultValue="profile" className="w-full">
+        <div className="grid gap-6 lg:grid-cols-[240px_1fr]">
+          {/* Sidebar */}
+          <div className="space-y-4">
+            <TabsList className="flex flex-col h-auto w-full bg-transparent p-0 gap-1">
+              <TabsTrigger
+                value="profile"
+                className="w-full justify-start gap-2 px-3"
+              >
+                <UserRound className="size-4" /> Profile
+              </TabsTrigger>
+              <TabsTrigger
+                value="tickets"
+                className="w-full justify-start gap-2 px-3"
+              >
+                <Ticket className="size-4" /> Tickets
+              </TabsTrigger>
+              <TabsTrigger
+                value="security"
+                className="w-full justify-start gap-2 px-3"
+              >
+                <Shield className="size-4" /> Security
+              </TabsTrigger>
+              <TabsTrigger
+                value="events"
+                className="w-full justify-start gap-2 px-3"
+              >
+                <CalendarDays className="size-4" /> Events
+              </TabsTrigger>
+            </TabsList>
+
+            <div className="rounded-lg border p-4">
+              <p className="text-xs text-muted-foreground">Signed in as</p>
+              <p className="mt-1 text-sm font-medium">
+                {data?.user?.name ?? "Guest"}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {data?.user?.email ?? "Not signed in"}
+              </p>
+              <div className="mt-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  onClick={async () => {
+                    await signOut();
+                  }}
+                >
+                  <LogOut className="size-4" />
+                  Sign out
+                </Button>
+              </div>
+            </div>
           </div>
 
-          <div className="mt-8 grid gap-6 lg:grid-cols-[.85fr_1.25fr]">
-            <Card className="bg-background/80 backdrop-blur">
-              <CardHeader>
-                <CardTitle>Navigation</CardTitle>
-                <CardDescription>Everything in one place.</CardDescription>
-              </CardHeader>
-              <CardContent className="grid gap-2">
-                <button
-                  type="button"
-                  onClick={() => setTab("profile")}
-                  className={cn(
-                    "flex w-full items-center justify-between rounded-xl border bg-background/70 px-4 py-3 text-left",
-                    tab === "profile" && "border-foreground/30 ring-1 ring-foreground/15"
-                  )}>
-                  <span className="inline-flex items-center gap-2 text-sm font-medium">
-                    <UserRound className="size-4 text-muted-foreground" /> Profile
-                  </span>
-                  <span className="text-xs text-muted-foreground">Name, avatar</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTab("tickets")}
-                  className={cn(
-                    "flex w-full items-center justify-between rounded-xl border bg-background/70 px-4 py-3 text-left",
-                    tab === "tickets" && "border-foreground/30 ring-1 ring-foreground/15"
-                  )}>
-                  <span className="inline-flex items-center gap-2 text-sm font-medium">
-                    <Ticket className="size-4 text-muted-foreground" /> Tickets
-                  </span>
-                  <span className="text-xs text-muted-foreground">QR + details</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTab("security")}
-                  className={cn(
-                    "flex w-full items-center justify-between rounded-xl border bg-background/70 px-4 py-3 text-left",
-                    tab === "security" && "border-foreground/30 ring-1 ring-foreground/15"
-                  )}>
-                  <span className="inline-flex items-center gap-2 text-sm font-medium">
-                    <Shield className="size-4 text-muted-foreground" /> Security
-                  </span>
-                  <span className="text-xs text-muted-foreground">Sessions</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTab("events")}
-                  className={cn(
-                    "flex w-full items-center justify-between rounded-xl border bg-background/70 px-4 py-3 text-left",
-                    tab === "events" && "border-foreground/30 ring-1 ring-foreground/15"
-                  )}>
-                  <span className="inline-flex items-center gap-2 text-sm font-medium">
-                    <CalendarDays className="size-4 text-muted-foreground" /> Events
-                  </span>
-                  <span className="text-xs text-muted-foreground">Manage</span>
-                </button>
-
-                <div className="mt-3 rounded-xl border bg-background/70 p-4">
-                  <p className="text-xs text-muted-foreground">Signed in as</p>
-                  <p className="mt-1 text-sm font-medium">
-                    {data?.user?.name ?? "Guest"}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {data?.user?.email ?? "Not signed in"}
-                  </p>
-                  <div className="mt-3">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="w-full"
-                      onClick={async () => {
-                        await signOut();
-                      }}>
-                      <LogOut className="size-4" />
-                      Sign out
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {tab === "profile" ? (
-              <Card className="bg-background/80 backdrop-blur">
+          {/* Content */}
+          <div className="min-w-0 space-y-6">
+            <TabsContent value="profile" className="mt-0 outline-none">
+              <Card>
                 <CardHeader>
                   <CardTitle>Profile</CardTitle>
-                  <CardDescription>Public-facing basics for your account.</CardDescription>
+                  <CardDescription>
+                    Public-facing basics for your account.
+                  </CardDescription>
                 </CardHeader>
                 <form onSubmit={onSaveProfile}>
-                  <CardContent className="grid gap-5">
+                  <CardContent className="grid gap-4">
                     <div className="grid gap-2">
                       <Label>Avatar</Label>
-                      <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-                        <div className="relative grid size-16 place-items-center overflow-hidden rounded-2xl border bg-background/70">
+                      <div className="flex items-center gap-4">
+                        <div className="relative grid size-14 place-items-center overflow-hidden rounded-lg border bg-muted">
                           {avatarUrl ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img
@@ -458,7 +415,7 @@ export default function SettingsPage() {
                             <ImageIcon className="size-5 text-muted-foreground" />
                           )}
                         </div>
-                        <div className="grid gap-2">
+                        <div className="grid gap-1">
                           <Input
                             type="file"
                             accept="image/*"
@@ -467,13 +424,13 @@ export default function SettingsPage() {
                             }
                           />
                           <p className="text-xs text-muted-foreground">
-                            This is local preview only until you wire upload.
+                            Local preview only.
                           </p>
                         </div>
                       </div>
                     </div>
 
-                    <div className="grid gap-2 sm:grid-cols-2">
+                    <div className="grid gap-4 sm:grid-cols-2">
                       <div className="grid gap-2">
                         <Label htmlFor="displayName">Display name</Label>
                         <Input
@@ -494,7 +451,7 @@ export default function SettingsPage() {
                               e.target.value
                                 .toLowerCase()
                                 .replace(/[^a-z0-9_]/g, "")
-                                .slice(0, 24)
+                                .slice(0, 24),
                             )
                           }
                           placeholder="your_handle"
@@ -523,35 +480,30 @@ export default function SettingsPage() {
                         onChange={(e) => setBio(e.target.value)}
                         placeholder="What do you host? What do you love?"
                         className={cn(
-                          "min-h-28 w-full resize-y rounded-md border bg-transparent px-3 py-2 text-sm shadow-xs outline-none",
+                          "min-h-24 w-full resize-y rounded-md border bg-transparent px-3 py-2 text-sm shadow-xs outline-none",
                           "placeholder:text-muted-foreground",
-                          "focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]"
+                          "focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]",
                         )}
                       />
                     </div>
                   </CardContent>
-                  <CardFooter className="flex flex-col gap-3 sm:flex-row sm:justify-between">
+                  <CardFooter className="flex justify-between">
                     <div className="text-xs text-muted-foreground">
-                      {saved ? (
-                        <span className="inline-flex items-center gap-2">
-                          <CircleCheck className="size-4" /> Saved
+                      {saved && (
+                        <span className="inline-flex items-center gap-1">
+                          <CircleCheck className="size-3.5" /> Saved
                         </span>
-                      ) : (
-                        ""
                       )}
                     </div>
-                    <Button
-                      type="submit"
-                      className="w-full sm:w-auto"
-                      disabled={busy}>
+                    <Button type="submit" disabled={busy}>
                       {busy ? "Saving..." : "Save changes"}
                     </Button>
                   </CardFooter>
                 </form>
               </Card>
-            ) : null}
+            </TabsContent>
 
-            {tab === "tickets" ? (
+            <TabsContent value="tickets" className="mt-0 outline-none">
               <TicketsPanel
                 tickets={tickets}
                 loading={ticketsLoading}
@@ -559,32 +511,35 @@ export default function SettingsPage() {
                 onUpdate={updateTicket}
                 onDelete={deleteTicket}
               />
-            ) : null}
+            </TabsContent>
 
-            {tab === "security" ? (
-              <Card className="bg-background/80 backdrop-blur">
+            <TabsContent value="security" className="mt-0 outline-none">
+              <Card>
                 <CardHeader>
                   <CardTitle>Security</CardTitle>
-                  <CardDescription>Session and sign-in hygiene.</CardDescription>
+                  <CardDescription>
+                    Session and sign-in hygiene.
+                  </CardDescription>
                 </CardHeader>
-                <CardContent className="grid gap-4">
-                  <div className="rounded-2xl border bg-background/70 p-4">
+                <CardContent className="grid gap-3">
+                  <div className="rounded-lg border p-4">
                     <p className="text-sm font-medium">Active session</p>
                     <p className="mt-1 text-xs text-muted-foreground">
                       Managed by Better Auth cookie plugin.
                     </p>
                   </div>
-                  <div className="rounded-2xl border bg-background/70 p-4">
+                  <div className="rounded-lg border p-4">
                     <p className="text-sm font-medium">Recommendations</p>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      Add passwordless-only policy, or enable passkeys when you a0want.
+                      Add passwordless-only policy, or enable passkeys when you
+                      want.
                     </p>
                   </div>
                 </CardContent>
               </Card>
-            ) : null}
+            </TabsContent>
 
-            {tab === "events" ? (
+            <TabsContent value="events" className="mt-0 outline-none">
               <EventsPanel
                 events={events}
                 loading={eventsLoading}
@@ -592,10 +547,10 @@ export default function SettingsPage() {
                 onUpdate={updateEvent}
                 onDelete={deleteEvent}
               />
-            ) : null}
+            </TabsContent>
           </div>
         </div>
-      </div>
+      </Tabs>
     </div>
   );
 }
@@ -655,161 +610,179 @@ function TicketsPanel({
   }, [active?.id, active?.eventSlug, active?.qty, active]);
 
   return (
-    <Card className="bg-background/80 backdrop-blur">
+    <Card>
       <CardHeader>
         <CardTitle>Tickets</CardTitle>
         <CardDescription>Show this QR at entry.</CardDescription>
       </CardHeader>
       <CardContent className="grid gap-4">
         {loading ? (
-          <div className="rounded-2xl border bg-background/70 p-4 text-sm text-muted-foreground">
+          <div className="rounded-lg border p-4 text-sm text-muted-foreground">
             Loading tickets...
           </div>
         ) : error ? (
-          <div className="rounded-2xl border bg-background/70 p-4 text-sm text-muted-foreground">
+          <div className="rounded-lg border p-4 text-sm text-muted-foreground">
             {error}
           </div>
         ) : tickets.length === 0 ? (
-          <div className="rounded-2xl border bg-background/70 p-4 text-sm text-muted-foreground">
+          <div className="rounded-lg border p-4 text-sm text-muted-foreground">
             No tickets yet.
           </div>
         ) : (
-        <div className="grid gap-2 sm:grid-cols-2">
-          <div className="grid gap-2">
-            <Label className="text-xs text-muted-foreground">Your tickets</Label>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {/* Ticket list */}
             <div className="grid gap-2">
-              {tickets.map((t) => (
-                <button
-                  key={t.id}
-                  type="button"
-                  onClick={() => setActiveId(t.id)}
-                  className={cn(
-                    "w-full rounded-2xl border bg-background/70 p-4 text-left shadow-sm",
-                    activeId === t.id &&
-                      "border-foreground/30 ring-1 ring-foreground/15"
-                  )}>
-                  <p className="text-sm font-semibold">{t.eventTitle}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {t.tierName}  b7 qty {t.qty}  b7 {formatWhen(t.startsAt)}
-                  </p>
-                </button>
-              ))}
+              <Label className="text-xs text-muted-foreground">
+                Your tickets
+              </Label>
+              <div className="grid gap-2">
+                {tickets.map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => setActiveId(t.id)}
+                    className={cn(
+                      "w-full rounded-lg border p-3 text-left",
+                      activeId === t.id &&
+                        "border-foreground/30 ring-1 ring-foreground/10",
+                    )}
+                  >
+                    <p className="text-sm font-semibold">{t.eventTitle}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {t.tierName} &middot; qty {t.qty} &middot;{" "}
+                      {formatWhen(t.startsAt)}
+                    </p>
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
 
+            {/* QR and actions */}
             <div className="grid gap-2">
               <Label className="text-xs text-muted-foreground">Entry QR</Label>
-              <div className="rounded-2xl border bg-background/70 p-4">
+              <div className="rounded-lg border p-4">
                 <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold">{active?.eventTitle ?? ""}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {active ? `${active.tierName}  b7 qty ${active.qty}` : ""}
-                  </p>
-                  <p className="mt-2 text-[11px] text-muted-foreground font-mono break-all">
-                    {active?.id}
-                  </p>
-                </div>
-                <div className="grid size-9 place-items-center rounded-xl border bg-background">
-                  <QrCode className="size-4 text-muted-foreground" />
-                </div>
+                  <div>
+                    <p className="text-sm font-semibold">
+                      {active?.eventTitle ?? ""}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {active
+                        ? `${active.tierName} \u00B7 qty ${active.qty}`
+                        : ""}
+                    </p>
+                    <p className="mt-2 text-[11px] text-muted-foreground font-mono break-all">
+                      {active?.id}
+                    </p>
+                  </div>
+                  <QrCode className="size-4 text-muted-foreground shrink-0" />
                 </div>
 
                 <div className="mt-4 grid place-items-center">
-                {busy || !qr ? (
-                  <div className="grid aspect-square w-full max-w-[240px] place-items-center rounded-2xl border bg-background">
-                    <p className="text-xs text-muted-foreground">Generating QR...</p>
-                  </div>
-                ) : (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={qr}
-                    alt="Ticket QR"
-                    className="aspect-square w-full max-w-[240px] rounded-2xl border bg-white p-2"
-                  />
-                )}
+                  {busy || !qr ? (
+                    <div className="grid aspect-square w-full max-w-[200px] place-items-center rounded-lg border bg-muted">
+                      <p className="text-xs text-muted-foreground">
+                        Generating QR...
+                      </p>
+                    </div>
+                  ) : (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={qr}
+                      alt="Ticket QR"
+                      className="aspect-square w-full max-w-[200px] rounded-lg border bg-white p-2"
+                    />
+                  )}
                 </div>
 
-              <div className="mt-4 flex flex-col gap-2">
-                <div className="flex items-end gap-2">
-                  <div className="grid gap-1">
-                    <Label className="text-[11px] text-muted-foreground">Quantity</Label>
-                    <Input
-                      value={qtyInput}
-                      onChange={(e) =>
-                        setQtyInput(e.target.value.replace(/[^0-9]/g, ""))
-                      }
-                      className="h-9"
-                      inputMode="numeric"
-                    />
+                <div className="mt-4 flex flex-col gap-2">
+                  <div className="flex items-end gap-2">
+                    <div className="grid gap-1 flex-1">
+                      <Label className="text-[11px] text-muted-foreground">
+                        Quantity
+                      </Label>
+                      <Input
+                        value={qtyInput}
+                        onChange={(e) =>
+                          setQtyInput(e.target.value.replace(/[^0-9]/g, ""))
+                        }
+                        inputMode="numeric"
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={!active || saving}
+                      onClick={async () => {
+                        if (!active) return;
+                        const nextQty = Number(qtyInput || active.qty);
+                        setSaving(true);
+                        try {
+                          await onUpdate(active.id, { qty: nextQty });
+                        } finally {
+                          setSaving(false);
+                        }
+                      }}
+                    >
+                      {saving ? "Saving..." : "Update qty"}
+                    </Button>
                   </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="h-9"
-                    disabled={!active || saving}
-                    onClick={async () => {
-                      if (!active) return;
-                      const nextQty = Number(qtyInput || active.qty);
-                      setSaving(true);
-                      try {
-                        await onUpdate(active.id, { qty: nextQty });
-                      } finally {
-                        setSaving(false);
-                      }
-                    }}>
-                    {saving ? "Saving..." : "Update qty"}
-                  </Button>
-                </div>
-                <div className="flex flex-col gap-2 sm:flex-row">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full"
-                  onClick={async () => {
-                    if (!active) return;
-                    await navigator.clipboard.writeText(active.id);
-                  }}>
-                  <Copy className="size-4" />
-                  Copy ticket id
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full"
-                  onClick={async () => {
-                    if (!qr) return;
-                    const a = document.createElement("a");
-                    a.href = qr;
-                    a.download = `${active?.eventSlug ?? "ticket"}-${active?.id ?? "qr"}.png`;
-                    document.body.appendChild(a);
-                    a.click();
-                    a.remove();
-                  }}>
-                  <Download className="size-4" />
-                  Download QR
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full"
-                  disabled={!active || deleteBusy}
-                  onClick={async () => {
-                    if (!active) return;
-                    setDeleteBusy(true);
-                    try {
-                      await onDelete(active.id);
-                    } finally {
-                      setDeleteBusy(false);
-                    }
-                  }}>
-                  {deleteBusy ? "Deleting..." : "Delete ticket"}
-                </Button>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      onClick={async () => {
+                        if (!active) return;
+                        await navigator.clipboard.writeText(active.id);
+                      }}
+                    >
+                      <Copy className="size-4" />
+                      Copy ID
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      onClick={async () => {
+                        if (!qr) return;
+                        const a = document.createElement("a");
+                        a.href = qr;
+                        a.download = `${active?.eventSlug ?? "ticket"}-${active?.id ?? "qr"}.png`;
+                        document.body.appendChild(a);
+                        a.click();
+                        a.remove();
+                      }}
+                    >
+                      <Download className="size-4" />
+                      Download QR
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      disabled={!active || deleteBusy}
+                      onClick={async () => {
+                        if (!active) return;
+                        setDeleteBusy(true);
+                        try {
+                          await onDelete(active.id);
+                        } finally {
+                          setDeleteBusy(false);
+                        }
+                      }}
+                    >
+                      {deleteBusy ? "Deleting..." : "Delete"}
+                    </Button>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
         )}
       </CardContent>
     </Card>
@@ -857,22 +830,22 @@ function EventsPanel({
   }
 
   return (
-    <Card className="bg-background/80 backdrop-blur">
+    <Card>
       <CardHeader>
         <CardTitle>Events</CardTitle>
         <CardDescription>Update event basics or delete.</CardDescription>
       </CardHeader>
-      <CardContent className="grid gap-4">
+      <CardContent className="grid gap-3">
         {loading ? (
-          <div className="rounded-2xl border bg-background/70 p-4 text-sm text-muted-foreground">
+          <div className="rounded-lg border p-4 text-sm text-muted-foreground">
             Loading events...
           </div>
         ) : error ? (
-          <div className="rounded-2xl border bg-background/70 p-4 text-sm text-muted-foreground">
+          <div className="rounded-lg border p-4 text-sm text-muted-foreground">
             {error}
           </div>
         ) : events.length === 0 ? (
-          <div className="rounded-2xl border bg-background/70 p-4 text-sm text-muted-foreground">
+          <div className="rounded-lg border p-4 text-sm text-muted-foreground">
             No events yet. Create one from /events/new.
           </div>
         ) : (
@@ -880,9 +853,7 @@ function EventsPanel({
             {events.map((event) => {
               const isEditing = editingId === event.id;
               return (
-                <div
-                  key={event.id}
-                  className="rounded-2xl border bg-background/70 p-4">
+                <div key={event.id} className="rounded-lg border p-4">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <p className="text-sm font-semibold">{event.title}</p>
@@ -897,7 +868,8 @@ function EventsPanel({
                         size="sm"
                         onClick={() =>
                           isEditing ? resetEdit() : beginEdit(event)
-                        }>
+                        }
+                      >
                         {isEditing ? "Cancel" : "Edit"}
                       </Button>
                       <Button
@@ -912,21 +884,23 @@ function EventsPanel({
                           } finally {
                             setDeleteBusy(null);
                           }
-                        }}>
+                        }}
+                      >
                         {deleteBusy === event.id ? "Deleting..." : "Delete"}
                       </Button>
                     </div>
                   </div>
 
-                  <div className="mt-3 text-xs text-muted-foreground">
-                    {formatWhen(event.startDate)} to {formatWhen(event.endDate)}
+                  <div className="mt-2 text-xs text-muted-foreground">
+                    {formatWhen(event.startDate)} to{" "}
+                    {formatWhen(event.endDate)}
                   </div>
                   <div className="text-xs text-muted-foreground">
                     {event.location}
                     {event.city ? `, ${event.city}` : ""}
                   </div>
 
-                  {isEditing ? (
+                  {isEditing && (
                     <div className="mt-4 grid gap-3">
                       <div className="grid gap-2">
                         <Label>Title</Label>
@@ -935,7 +909,7 @@ function EventsPanel({
                           onChange={(e) => setTitle(e.target.value)}
                         />
                       </div>
-                      <div className="grid gap-2 sm:grid-cols-2">
+                      <div className="grid gap-4 sm:grid-cols-2">
                         <div className="grid gap-2">
                           <Label>Start</Label>
                           <Input
@@ -953,7 +927,7 @@ function EventsPanel({
                           />
                         </div>
                       </div>
-                      <div className="grid gap-2 sm:grid-cols-2">
+                      <div className="grid gap-4 sm:grid-cols-2">
                         <div className="grid gap-2">
                           <Label>Location</Label>
                           <Input
@@ -988,12 +962,13 @@ function EventsPanel({
                             } finally {
                               setSaving(false);
                             }
-                          }}>
+                          }}
+                        >
                           {saving ? "Saving..." : "Save changes"}
                         </Button>
                       </div>
                     </div>
-                  ) : null}
+                  )}
                 </div>
               );
             })}

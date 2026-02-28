@@ -1,30 +1,6 @@
 import { Elysia, t } from "elysia";
 import { prisma } from "@/lib/prisma";
 
-const db = prisma as unknown as {
-  ticket: {
-    findMany: (args: {
-      where?: { userId?: string; eventId?: string };
-      orderBy: { createdAt: "asc" | "desc" };
-      include?: { event: true };
-    }) => Promise<unknown>;
-    findUnique: (args: {
-      where: { id: string };
-      include?: { event: true };
-    }) => Promise<unknown | null>;
-    create: (args: {
-      data: { tierName: string; qty: number; eventId: string; userId?: string | null };
-      include?: { event: true };
-    }) => Promise<unknown>;
-    update: (args: {
-      where: { id: string };
-      data: { tierName?: string; qty?: number; eventId?: string; userId?: string | null };
-      include?: { event: true };
-    }) => Promise<unknown>;
-    delete: (args: { where: { id: string } }) => Promise<unknown>;
-  };
-};
-
 const ticketCreateSchema = t.Object({
   tierName: t.String(),
   qty: t.Number(),
@@ -38,7 +14,7 @@ export const ticketsRoutes = new Elysia({ prefix: "/tickets" })
   .get(
     "/",
     async ({ query }) =>
-      db.ticket.findMany({
+      prisma.ticket.findMany({
         where: {
           userId: typeof query.userId === "string" ? query.userId : undefined,
           eventId: typeof query.eventId === "string" ? query.eventId : undefined,
@@ -56,7 +32,7 @@ export const ticketsRoutes = new Elysia({ prefix: "/tickets" })
   .get(
     "/:id",
     async ({ params, set }) => {
-      const ticket = await db.ticket.findUnique({
+      const ticket = await prisma.ticket.findUnique({
         where: { id: params.id },
         include: { event: true },
       });
@@ -76,7 +52,7 @@ export const ticketsRoutes = new Elysia({ prefix: "/tickets" })
     "/",
     async ({ body, set }) => {
       try {
-        const ticket = await db.ticket.create({
+        const ticket = await prisma.ticket.create({
           data: {
             tierName: body.tierName,
             qty: body.qty,
@@ -109,7 +85,7 @@ export const ticketsRoutes = new Elysia({ prefix: "/tickets" })
     "/:id",
     async ({ params, body, set }) => {
       try {
-        const ticket = await db.ticket.update({
+        const ticket = await prisma.ticket.update({
           where: { id: params.id },
           data: { ...body, userId: body.userId ?? undefined },
           include: { event: true },
@@ -139,7 +115,7 @@ export const ticketsRoutes = new Elysia({ prefix: "/tickets" })
     "/:id",
     async ({ params, set }) => {
       try {
-        await db.ticket.delete({ where: { id: params.id } });
+        await prisma.ticket.delete({ where: { id: params.id } });
         return { ok: true };
       } catch (error: unknown) {
         if (

@@ -1,19 +1,6 @@
 import { Elysia, t } from "elysia";
 import { prisma } from "@/lib/prisma";
 
-const db = prisma as unknown as {
-  organizer: {
-    findMany: (args: { orderBy: { name: "asc" | "desc" } }) => Promise<unknown>;
-    findUnique: (args: { where: { id: string } }) => Promise<unknown | null>;
-    create: (args: { data: { name: string; email: string | null } }) => Promise<unknown>;
-    update: (args: {
-      where: { id: string };
-      data: { name?: string; email?: string | null };
-    }) => Promise<unknown>;
-    delete: (args: { where: { id: string } }) => Promise<unknown>;
-  };
-};
-
 const organizerCreateSchema = t.Object({
   name: t.String(),
   email: t.Optional(t.String()),
@@ -22,11 +9,11 @@ const organizerCreateSchema = t.Object({
 const organizerUpdateSchema = t.Partial(organizerCreateSchema);
 
 export const organizersRoutes = new Elysia({ prefix: "/organizers" })
-  .get("/", async () => db.organizer.findMany({ orderBy: { name: "asc" } }))
+  .get("/", async () => prisma.organizer.findMany({ orderBy: { name: "asc" } }))
   .get(
     "/:id",
     async ({ params, set }) => {
-      const organizer = await db.organizer.findUnique({
+      const organizer = await prisma.organizer.findUnique({
         where: { id: params.id },
       });
 
@@ -45,7 +32,7 @@ export const organizersRoutes = new Elysia({ prefix: "/organizers" })
     "/",
     async ({ body, set }) => {
       try {
-        const organizer = await db.organizer.create({
+        const organizer = await prisma.organizer.create({
           data: { name: body.name, email: body.email ?? null },
         });
         return organizer;
@@ -71,7 +58,7 @@ export const organizersRoutes = new Elysia({ prefix: "/organizers" })
     "/:id",
     async ({ params, body, set }) => {
       try {
-        const organizer = await db.organizer.update({
+        const organizer = await prisma.organizer.update({
           where: { id: params.id },
           data: { ...body },
         });
@@ -99,7 +86,7 @@ export const organizersRoutes = new Elysia({ prefix: "/organizers" })
     "/:id",
     async ({ params, set }) => {
       try {
-        await db.organizer.delete({ where: { id: params.id } });
+        await prisma.organizer.delete({ where: { id: params.id } });
         return { ok: true };
       } catch (error: unknown) {
         if (

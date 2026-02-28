@@ -2,14 +2,14 @@
 
 import * as React from "react";
 import {
-  BadgeDollarSign,
   CalendarDays,
   Check,
-  CircleAlert,
+  CornerDownRight,
   MapPin,
   Minus,
   Plus,
   Ticket,
+  Mail,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,9 @@ import {
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import type { Event as ApiEvent } from "@/generated/prisma";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 type Tier = {
   id: string;
@@ -32,31 +35,18 @@ type Tier = {
   note?: string;
 };
 
-type ApiEvent = {
-  id: string;
-  slug: string;
-  title: string;
-  description: string;
-  posterImage: string;
-  startDate: string;
-  endDate: string;
-  location: string;
-  city: string;
-  prices: unknown;
-  totalTickets: number;
-  organizer?: { name: string } | null;
-};
-
 type ViewEvent = {
   slug: string;
   title: string;
   tagline: string;
   description: string;
   location: string;
-  start: string;
-  end: string;
+  start: string | Date;
+  end: string | Date;
   cover: string;
   tiers: Tier[];
+  contactEmail: string | null;
+  totalTickets?: number;
 };
 
 function formatMoney(n: number) {
@@ -132,7 +122,8 @@ export default function BuyerEventView({ slug }: { slug: string }) {
       })
       .catch((err: unknown) => {
         if (!active) return;
-        const message = err instanceof Error ? err.message : "Failed to load event";
+        const message =
+          err instanceof Error ? err.message : "Failed to load event";
         setLoadError(message);
         setEvent(null);
       })
@@ -153,71 +144,66 @@ export default function BuyerEventView({ slug }: { slug: string }) {
     return {
       slug: event.slug,
       title: event.title,
-      tagline: event.organizer?.name ?? "Live event",
+      tagline: (event as any).organizer?.name ?? "Live event",
       description: event.description,
       location: `${event.location}, ${event.city}`,
       start: event.startDate,
       end: event.endDate,
-      cover: event.posterImage,
+      cover: event.posterImage ?? "",
       tiers,
+      contactEmail: event.contactEmail ?? null,
+      totalTickets: event.totalTickets,
     };
   }, [event]);
 
-  const [selectedTierId, setSelectedTierId] = React.useState("");
-  const selected = viewEvent?.tiers.find((t) => t.id === selectedTierId) ??
-    viewEvent?.tiers[0];
-  const [qty, setQty] = React.useState(1);
+  const [selections, setSelections] = React.useState<Record<string, number>>(
+    {},
+  );
   const [purchased, setPurchased] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
 
   React.useEffect(() => {
-    if (!viewEvent || viewEvent.tiers.length === 0) {
-      setSelectedTierId("");
-      setQty(1);
-      setPurchased(false);
-      return;
-    }
-
-    setSelectedTierId((current) =>
-      viewEvent.tiers.some((tier) => tier.id === current)
-        ? current
-        : viewEvent.tiers[0].id
-    );
-    setQty(1);
+    setSelections({});
     setPurchased(false);
-  }, [viewEvent?.slug, viewEvent?.tiers]);
+  }, [viewEvent?.slug]);
 
-  const maxQty = Math.max(1, Math.min(8, selected?.remaining ?? 1));
-  const safeQty = Math.max(1, Math.min(qty, maxQty));
-  const subtotal = (selected?.price ?? 0) * safeQty;
-  const fee = Math.max(0, Math.round(subtotal * 0.06 * 100) / 100);
+  const selectedTiers = React.useMemo(() => {
+    if (!viewEvent) return [];
+    return viewEvent.tiers
+      .filter((t) => selections[t.id] > 0)
+      .map((t) => ({ ...t, qty: selections[t.id] }));
+  }, [viewEvent, selections]);
+
+  const subtotal = selectedTiers.reduce((acc, t) => acc + t.price * t.qty, 0);
+  const fee = Math.min(5, Math.max(0, Math.round(subtotal * 0.02 * 100) / 100));
   const total = subtotal + fee;
 
   async function onCheckout() {
-    if (!selected || !event) return;
+    if (selectedTiers.length === 0 || !event) return;
     setBusy(true);
     try {
-      const res = await fetch("/api/tickets", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          tierName: selected.name,
-          qty: safeQty,
-          eventId: event.id,
-        }),
-      });
-
-      if (!res.ok) {
-        const body = await res.json().catch(() => null);
-        const message =
-          body && typeof body.message === "string"
-            ? body.message
-            : "Failed to create ticket";
-        throw new Error(message);
-      }
+      await Promise.all(
+        selectedTiers.map((t) =>
+          fetch("/api/tickets", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              tierName: t.name,
+              qty: t.qty,
+              eventId: event.id,
+            }),
+          }).then((res) => {
+            if (!res.ok) throw new Error("Failed to create ticket");
+            return res.json();
+          }),
+        ),
+      );
 
       setPurchased(true);
-      setQty(1);
+      setSelections({});
+    } catch (err) {
+      console.error(err);
+      alert("Failed to complete purchase. Please try again.");
     } finally {
       setBusy(false);
     }
@@ -225,8 +211,8 @@ export default function BuyerEventView({ slug }: { slug: string }) {
 
   if (loading) {
     return (
-      <div className="mx-auto w-full max-w-6xl">
-        <div className="rounded-3xl border bg-background p-10 text-sm text-muted-foreground">
+      <div className="mx-auto w-full max-w-5xl px-4 py-10">
+        <div className="rounded-lg border p-8 text-sm text-muted-foreground">
           Loading event...
         </div>
       </div>
@@ -235,8 +221,8 @@ export default function BuyerEventView({ slug }: { slug: string }) {
 
   if (loadError) {
     return (
-      <div className="mx-auto w-full max-w-6xl">
-        <div className="rounded-3xl border bg-background p-10 text-sm text-muted-foreground">
+      <div className="mx-auto w-full max-w-5xl px-4 py-10">
+        <div className="rounded-lg border p-8 text-sm text-muted-foreground">
           {loadError}
         </div>
       </div>
@@ -245,8 +231,8 @@ export default function BuyerEventView({ slug }: { slug: string }) {
 
   if (!event || !viewEvent) {
     return (
-      <div className="mx-auto w-full max-w-6xl">
-        <div className="rounded-3xl border bg-background p-10 text-sm text-muted-foreground">
+      <div className="mx-auto w-full max-w-5xl px-4 py-10">
+        <div className="rounded-lg border p-8 text-sm text-muted-foreground">
           Event not found.
         </div>
       </div>
@@ -263,256 +249,303 @@ export default function BuyerEventView({ slug }: { slug: string }) {
     minute: "2-digit",
   }).format(start);
   const until = new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
   }).format(end);
 
   return (
-    <div className="mx-auto w-full max-w-6xl">
-      <div className="relative overflow-hidden rounded-3xl border bg-background">
-        <div className="relative">
+    <div className="mx-auto w-full max-w-5xl px-4 py-10">
+      {/* Cover Image */}
+      {viewEvent.cover && (
+        <div className="rounded-lg overflow-hidden mb-6">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={viewEvent.cover}
-              alt="Event cover"
-              className="h-56 w-full object-cover sm:h-72"
-            />
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-0"
-            style={{
-              background:
-                "linear-gradient(to bottom, transparent 45%, oklch(1 0 0 / .95) 100%)",
-            }}
+          <img
+            src={viewEvent.cover}
+            alt="Event cover"
+            className="h-56 w-full object-cover sm:h-72"
           />
-          <div className="absolute left-6 right-6 bottom-6 sm:left-10 sm:right-10">
-            <div className="flex flex-col gap-2">
-              <p className="text-xs text-muted-foreground">
-                <span className="rounded-full border bg-background/70 px-3 py-1 font-mono">
-                  /e/{viewEvent.slug}
-                </span>
-              </p>
-              <h1 className="text-balance text-2xl font-semibold tracking-tight sm:text-4xl">
-                {viewEvent.title}
-              </h1>
-              <p className="max-w-2xl text-sm text-muted-foreground sm:text-base">
-                {viewEvent.tagline}
-              </p>
-            </div>
-          </div>
+        </div>
+      )}
+
+      <div className="mb-6">
+        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+          {viewEvent.title}
+        </h1>
+        <p className="text-muted-foreground mt-1">
+          {viewEvent.tagline}
+        </p>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-[1.25fr_.85fr]">
+        <div className="grid gap-6">
+          {/* About */}
+          <Card>
+            <CardHeader>
+              <CardTitle>About</CardTitle>
+              <CardDescription>
+                What you should know before you go.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-4">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="flex items-start gap-3">
+                  <CalendarDays className="mt-0.5 size-4 text-muted-foreground" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">When</p>
+                    <p className="text-sm font-medium">{when}</p>
+                    <p className="text-sm font-medium inline-flex">
+                      <CornerDownRight className="opacity-60 size-4 mr-1" />
+                      {until}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <MapPin className="mt-0.5 size-4 text-muted-foreground" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Where</p>
+                    <p className="text-sm font-medium">
+                      {viewEvent.location}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <Mail className="mt-0.5 size-4 text-muted-foreground" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Contact</p>
+                    <p className="text-sm font-medium">
+                      {viewEvent.contactEmail ?? "No contact email provided"}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <Ticket className="mt-0.5 size-4 text-muted-foreground" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">
+                      Available Tickets
+                    </p>
+                    <p className="text-sm font-medium">
+                      {viewEvent.totalTickets}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="prose prose-sm dark:prose-invert max-w-none">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {viewEvent.description}
+                </ReactMarkdown>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Tickets */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Tickets</CardTitle>
+              <CardDescription>
+                Select a tier. Seats are limited.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-3">
+              {viewEvent.tiers.map((t: Tier) => {
+                const qty = selections[t.id] || 0;
+                const soldOut = t.remaining <= 0;
+                const maxQty = Math.max(0, Math.min(8, t.remaining));
+
+                return (
+                  <div
+                    key={t.id}
+                    className={cn(
+                      "rounded-lg border p-4",
+                      qty > 0 && "border-foreground/30 ring-1 ring-foreground/10",
+                      soldOut && "opacity-60",
+                    )}
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold">{t.name}</p>
+                        {t.note && (
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {t.note}
+                          </p>
+                        )}
+                        <p className="mt-1 text-sm font-semibold">
+                          {formatMoney(t.price)}
+                        </p>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <div className="flex items-center gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            className="size-8"
+                            onClick={() =>
+                              setSelections((prev) => ({
+                                ...prev,
+                                [t.id]: Math.max(0, (prev[t.id] || 0) - 1),
+                              }))
+                            }
+                            disabled={qty <= 0}
+                          >
+                            <Minus className="size-3" />
+                          </Button>
+                          <div className="min-w-8 text-center font-mono text-sm">
+                            {qty}
+                          </div>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            className="size-8"
+                            onClick={() =>
+                              setSelections((prev) => ({
+                                ...prev,
+                                [t.id]: Math.min(
+                                  maxQty,
+                                  (prev[t.id] || 0) + 1,
+                                ),
+                              }))
+                            }
+                            disabled={qty >= maxQty || soldOut}
+                          >
+                            <Plus className="size-3" />
+                          </Button>
+                        </div>
+                        <p className="mt-1 text-xs text-muted-foreground text-center">
+                          {soldOut ? "Sold out" : `${t.remaining} left`}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </CardContent>
+          </Card>
+
+          {/* Venue */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Venue</CardTitle>
+              <CardDescription>
+                Check the map and plan your route.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="rounded-lg overflow-hidden">
+                <iframe
+                  width="100%"
+                  height="300"
+                  src="https://maps.google.com/maps?width=650&height=400&hl=en&q=2880%20Broadway%2C%20New%20York&t=&z=14&ie=UTF8&iwloc=B&output=embed"
+                  loading="lazy"
+                />
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
-        <div className="grid gap-6 p-6 sm:p-10 lg:grid-cols-[1.25fr_.85fr]">
-          <div className="grid gap-6">
-            <Card className="bg-background/80 backdrop-blur">
-              <CardHeader>
-                <CardTitle>About</CardTitle>
-                <CardDescription>What you a0should know before you go.</CardDescription>
-              </CardHeader>
-              <CardContent className="grid gap-4">
-                <p className="text-sm leading-relaxed text-foreground/90">
-                  {viewEvent.description}
-                </p>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="flex items-start gap-3 rounded-xl border bg-background/60 p-4">
-                    <CalendarDays className="mt-0.5 size-4 text-muted-foreground" />
-                    <div className="min-w-0">
-                      <p className="text-xs text-muted-foreground">When</p>
-                      <p className="text-sm font-medium">
-                        {when}  a0 b7 a0 until {until}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3 rounded-xl border bg-background/60 p-4">
-                    <MapPin className="mt-0.5 size-4 text-muted-foreground" />
-                    <div className="min-w-0">
-                      <p className="text-xs text-muted-foreground">Where</p>
-                      <p className="text-sm font-medium">{viewEvent.location}</p>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-background/80 backdrop-blur">
-              <CardHeader>
-                <CardTitle>Tickets</CardTitle>
-                <CardDescription>Select a tier. Seats are limited.</CardDescription>
-              </CardHeader>
-              <CardContent className="grid gap-3">
-                {viewEvent.tiers.map((t: Tier) => {
-                  const selected = t.id === selectedTierId;
-                  const soldOut = t.remaining <= 0;
-                  return (
-                    <button
-                      key={t.id}
-                      type="button"
-                      disabled={soldOut}
-                      onClick={() => setSelectedTierId(t.id)}
-                      className={cn(
-                        "group w-full rounded-2xl border bg-background/70 p-4 text-left shadow-sm",
-                        "transition-[transform,box-shadow,border-color]",
-                        "hover:-translate-y-[1px] hover:shadow-md",
-                        selected && "border-foreground/30 ring-1 ring-foreground/15",
-                        soldOut && "opacity-60 cursor-not-allowed"
-                      )}>
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <p className="text-sm font-semibold">{t.name}</p>
-                            {selected ? (
-                              <span className="inline-flex items-center gap-1 rounded-full border bg-background px-2 py-0.5 text-[11px]">
-                                <Check className="size-3" /> Selected
-                              </span>
-                            ) : null}
-                          </div>
-                          {t.note ? (
-                            <p className="mt-1 text-xs text-muted-foreground">{t.note}</p>
-                          ) : null}
-                        </div>
-                        <div className="shrink-0 text-right">
-                          <p className="text-sm font-semibold">{formatMoney(t.price)}</p>
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            {soldOut ? "Sold out" : `${t.remaining} left`}
-                          </p>
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
-              </CardContent>
-            </Card>
-          </div>
-
-          <div className="grid content-start gap-6">
-            <Card className="sticky top-6 bg-background/80 backdrop-blur">
-              <CardHeader>
-                <CardTitle>Checkout</CardTitle>
-                <CardDescription>
-                  {selected ? (
-                    <span className="inline-flex items-center gap-2">
-                      <Ticket className="size-4" />
-                      {selected.name}
-                    </span>
-                  ) : (
-                    "Pick a ticket tier"
-                  )}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="grid gap-5">
-                <div className="rounded-2xl border bg-background/70 p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-xs text-muted-foreground">Quantity</p>
-                      <p className="text-sm font-medium">Up to {maxQty}</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        onClick={() => setQty((q) => Math.max(1, q - 1))}
-                        disabled={safeQty <= 1}>
-                        <Minus className="size-4" />
-                      </Button>
-                      <div className="min-w-10 text-center font-mono text-sm">
-                        {safeQty}
-                      </div>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        onClick={() => setQty((q) => Math.min(maxQty, q + 1))}
-                        disabled={safeQty >= maxQty}>
-                        <Plus className="size-4" />
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid gap-3 rounded-2xl border bg-background/70 p-4">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Subtotal</span>
-                    <span className="font-medium">{formatMoney(subtotal)}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Fees</span>
-                    <span className="font-medium">{formatMoney(fee)}</span>
-                  </div>
-                  <div className="h-px w-full bg-border" />
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-semibold">Total</span>
-                    <span className="text-sm font-semibold">{formatMoney(total)}</span>
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border bg-background/70 p-4">
-                  <div className="flex items-start gap-3">
-                    <BadgeDollarSign className="mt-0.5 size-4 text-muted-foreground" />
-                    <div>
-                      <p className="text-sm font-medium">Fast checkout (stub)</p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        This UI is wired to a fake purchase. Connect it to Stripe/checkout
-                        and ticket issuance.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {purchased ? (
-                  <div className="rounded-2xl border bg-background/70 p-4">
-                    <div className="flex items-start gap-3">
-                      <Check className="mt-0.5 size-4" />
-                      <div>
-                        <p className="text-sm font-semibold">Purchase complete</p>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          View your ticket + QR in Settings  bb Tickets.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                ) : selected?.remaining ? null : (
-                  <div className="rounded-2xl border bg-background/70 p-4">
-                    <div className="flex items-start gap-3">
-                      <CircleAlert className="mt-0.5 size-4 text-muted-foreground" />
-                      <div>
-                        <p className="text-sm font-semibold">Tier sold out</p>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          Pick another tier to continue.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
+        {/* Sidebar - Checkout */}
+        <div className="grid content-start gap-6">
+          <Card className="sticky top-20">
+            <CardHeader>
+              <CardTitle>Checkout</CardTitle>
+              <CardDescription>
+                {selectedTiers.length > 0 ? (
+                  <span className="inline-flex items-center gap-2">
+                    <Ticket className="size-4" />
+                    {selectedTiers.length} type(s) selected
+                  </span>
+                ) : (
+                  "Pick your tickets"
                 )}
-              </CardContent>
-              <CardFooter className="flex flex-col gap-3 sm:flex-row sm:justify-end">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full sm:w-auto"
-                  onClick={() => {
-                    setSelectedTierId(viewEvent.tiers[0]?.id ?? "");
-                    setQty(1);
-                    setPurchased(false);
-                  }}>
-                  Reset
-                </Button>
-                <Button
-                  type="button"
-                  className="w-full sm:w-auto"
-                  onClick={onCheckout}
-                  disabled={!selected || selected.remaining <= 0 || busy}>
-                  {busy ? "Processing..." : "Buy ticket"}
-                </Button>
-              </CardFooter>
-            </Card>
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-4">
+              {selectedTiers.length > 0 && (
+                <div className="grid gap-2 rounded-lg border p-4">
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Your selection
+                  </p>
+                  {selectedTiers.map((t) => (
+                    <div
+                      key={t.id}
+                      className="flex items-center justify-between text-sm"
+                    >
+                      <span>
+                        {t.qty}x {t.name}
+                      </span>
+                      <span>{formatMoney(t.price * t.qty)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
 
-            <div className="px-1">
-              <Label className="text-xs text-muted-foreground">Safety</Label>
-              <p className="mt-1 text-xs text-muted-foreground">
-                If you don a0see resold tickets, your entry QR will be invalidated.
-              </p>
-            </div>
+              <div className="grid gap-2 rounded-lg border p-4">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Subtotal</span>
+                  <span className="font-medium">{formatMoney(subtotal)}</span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">
+                    Fees (2% up to $5)
+                  </span>
+                  <span className="font-medium">{formatMoney(fee)}</span>
+                </div>
+                <div className="h-px bg-border" />
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold">Total</span>
+                  <span className="text-sm font-semibold">
+                    {formatMoney(total)}
+                  </span>
+                </div>
+              </div>
+
+              {purchased && (
+                <div className="rounded-lg border p-4">
+                  <div className="flex items-start gap-3">
+                    <Check className="mt-0.5 size-4" />
+                    <div>
+                      <p className="text-sm font-semibold">
+                        Purchase complete
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        View your ticket + QR in your tickets.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+            <CardFooter className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full sm:w-auto"
+                onClick={() => {
+                  setSelections({});
+                  setPurchased(false);
+                }}
+              >
+                Reset
+              </Button>
+              <Button
+                type="button"
+                className="w-full sm:w-auto"
+                onClick={onCheckout}
+                disabled={selectedTiers.length === 0 || busy}
+              >
+                {busy ? "Processing..." : "Buy tickets"}
+              </Button>
+            </CardFooter>
+          </Card>
+
+          <div className="px-1">
+            <p className="text-xs text-muted-foreground">
+              By purchasing a ticket, you agree to follow the event's safety
+              guidelines and policies.
+            </p>
           </div>
         </div>
       </div>
