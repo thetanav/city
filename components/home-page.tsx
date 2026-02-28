@@ -34,26 +34,13 @@ type TicketData = {
   };
 };
 
-export default function HomePage({ user }: { user: any }) {
-  const [tickets, setTickets] = React.useState<TicketData[]>([]);
-  const [loading, setLoading] = React.useState(true);
-
-  React.useEffect(() => {
-    if (user?.id) {
-      fetch(`/api/tickets?userId=${user.id}`)
-        .then((res) => res.json())
-        .then((data) => {
-          setTickets(data);
-          setLoading(false);
-        })
-        .catch((err) => {
-          console.error("Failed to fetch tickets:", err);
-          setLoading(false);
-        });
-    } else {
-      setLoading(false);
-    }
-  }, [user?.id]);
+export default function HomePage({
+  user,
+  tickets,
+}: {
+  user: any;
+  tickets: TicketData[];
+}) {
 
   if (!user) {
     return (
@@ -103,16 +90,7 @@ export default function HomePage({ user }: { user: any }) {
       <section className="space-y-4">
         <h2 className="text-lg font-semibold">My Tickets</h2>
 
-        {loading ? (
-          <div className="grid gap-4 md:grid-cols-2">
-            {[1, 2].map((i) => (
-              <div
-                key={i}
-                className="h-48 rounded-lg bg-muted animate-pulse"
-              />
-            ))}
-          </div>
-        ) : tickets.length > 0 ? (
+        {tickets.length > 0 ? (
           <div className="grid gap-4 md:grid-cols-2">
             {tickets.map((ticket) => (
               <TicketCard key={ticket.id} ticket={ticket} />

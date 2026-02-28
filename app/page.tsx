@@ -4,6 +4,7 @@ import HomePage from "@/components/home-page";
 import SignIn from "@/components/auth/sign-in";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
+import { prisma } from "@/lib/prisma";
 
 export default async function Page() {
   const session = await auth.api.getSession({
@@ -41,5 +42,35 @@ export default async function Page() {
     );
   }
 
-  return <HomePage user={session.user} />;
+  const tickets = await prisma.ticket.findMany({
+    where: { userId: session.user.id },
+    orderBy: { createdAt: "desc" },
+    include: {
+      event: {
+        select: {
+          id: true,
+          title: true,
+          startDate: true,
+          location: true,
+          posterImage: true,
+        },
+      },
+    },
+  });
+
+  const mappedTickets = tickets.map((ticket) => ({
+    id: ticket.id,
+    tierName: ticket.tierName,
+    qty: ticket.qty,
+    createdAt: ticket.createdAt.toISOString(),
+    event: {
+      id: ticket.event.id,
+      title: ticket.event.title,
+      startDate: ticket.event.startDate.toISOString(),
+      location: ticket.event.location,
+      posterImage: ticket.event.posterImage,
+    },
+  }));
+
+  return <HomePage user={session.user} tickets={mappedTickets} />;
 }

@@ -1,13 +1,7 @@
 "use client";
 
 import * as React from "react";
-import {
-  Search,
-  MapPin,
-  Calendar,
-  X,
-  SlidersHorizontal,
-} from "lucide-react";
+import { Search, MapPin, Calendar, X, SlidersHorizontal } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -70,23 +64,19 @@ export default function ExplorePage() {
       {/* Search Header */}
       <div className="border-b">
         <div className="container max-w-6xl mx-auto px-4 py-6 space-y-4">
-          <div className="flex flex-col sm:flex-row gap-4 sm:items-center justify-between">
-            <h1 className="text-2xl font-bold tracking-tight">
-              Explore Events
-            </h1>
-            <div className="relative flex-1 max-w-md">
+          <div className="flex flex-col sm:flex-row gap-2 sm:items-center justify-between">
+            <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
               <Input
                 placeholder="Search events..."
-                className="pl-9"
+                className="pl-6"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
               {search && (
                 <button
                   onClick={() => setSearch("")}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                >
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
                   <X className="size-4" />
                 </button>
               )}
@@ -94,8 +84,7 @@ export default function ExplorePage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setShowFilters(!showFilters)}
-            >
+              onClick={() => setShowFilters(!showFilters)}>
               <SlidersHorizontal className="mr-2 size-4" />
               Filters
               {selectedGenre && (
@@ -111,8 +100,7 @@ export default function ExplorePage() {
               <Badge
                 variant={!selectedGenre ? "default" : "outline"}
                 className="cursor-pointer"
-                onClick={() => setSelectedGenre(null)}
-              >
+                onClick={() => setSelectedGenre(null)}>
                 All
               </Badge>
               {genres.map((genre) => (
@@ -120,8 +108,7 @@ export default function ExplorePage() {
                   key={genre}
                   variant={selectedGenre === genre ? "default" : "outline"}
                   className="cursor-pointer"
-                  onClick={() => setSelectedGenre(genre)}
-                >
+                  onClick={() => setSelectedGenre(genre)}>
                   {genre}
                 </Badge>
               ))}
@@ -161,8 +148,7 @@ export default function ExplorePage() {
               onClick={() => {
                 setSearch("");
                 setSelectedGenre(null);
-              }}
-            >
+              }}>
               Clear filters
             </Button>
           </div>
