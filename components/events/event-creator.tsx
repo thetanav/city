@@ -24,6 +24,11 @@ type Tier = {
   note: string;
 };
 
+type CreateEventResponse = {
+  id: string;
+  slug: string;
+};
+
 function slugify(raw: string) {
   return raw
     .toLowerCase()
@@ -122,23 +127,56 @@ export default function EventCreator() {
     setTiers((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)));
   }
 
-  function onSubmit(e: React.FormEvent) {
+  async function createEvent() {
+    const prices = tiers.map((tier) => ({
+      id: tier.id,
+      name: tier.name || "General",
+      price: Number(tier.price) || 0,
+      seats: Number(tier.seats) || 0,
+      note: tier.note || undefined,
+    }));
+
+    const res = await fetch("/api/events", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title,
+        tagline,
+        description,
+        slug,
+        startDate: startAt,
+        endDate: endAt,
+        location,
+        city: "",
+        contactEmail: "",
+        posterImage: coverFile ? coverFile.name : null,
+        prices,
+        totalTickets: totalSeats,
+        genre: [],
+      }),
+    });
+
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      const message =
+        body && typeof body.message === "string"
+          ? body.message
+          : "Failed to create event";
+      throw new Error(message);
+    }
+
+    return (await res.json()) as CreateEventResponse;
+  }
+
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const payload = {
-      title,
-      tagline,
-      description,
-      location,
-      startAt,
-      endAt,
-      slug,
-      tiers,
-      coverFile: coverFile
-        ? { name: coverFile.name, type: coverFile.type }
-        : null,
-    };
-    // Wire this to your API route later.
-    console.log("create-event", payload);
+    try {
+      const created = await createEvent();
+      window.location.href = `/e/${created.slug}`;
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Failed to create event";
+      alert(message);
+    }
   }
 
   return (

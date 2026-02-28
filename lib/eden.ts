@@ -1,5 +1,5 @@
 import { treaty } from "@elysiajs/eden";
-import type { app } from "@/app/api/[[...slugs]]/route";
+import { app } from "@/server/api/app";
 
 // .api to enter /api prefix
 export const api =

@@ -1,5 +1,5 @@
 generator client {
-  provider = "prisma-client"
+  provider = "prisma-client-js"
   output   = "../lib/generated/prisma"
 }
 
@@ -8,7 +8,7 @@ datasource db {
 }
 
 model User {
-  id            String    @id
+  id            String    @id @default(cuid())
   name          String
   email         String
   emailVerified Boolean   @default(false)
@@ -18,21 +18,22 @@ model User {
   sessions      Session[]
   accounts      Account[]
   tickets       Ticket[]
+  events        Event[]   @relation("EventCreator")
 
   @@unique([email])
   @@map("user")
 }
 
 model Ticket {
-  id        String   @id
-  title     String
-  content   String
+  id        String   @id @default(cuid())
+  tierName  String
+  qty       Int      @default(1)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   eventId   String
   event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([eventId])
@@ -40,46 +41,34 @@ model Ticket {
 }
 
 model Event {
-  id           String    @id
-  posterImage  String
+  id           String     @id @default(cuid())
+  posterImage  String?
   title        String
+  tagline      String?
   description  String
-  slug         String    @unique
+  slug         String     @unique
   startDate    DateTime
   endDate      DateTime
   location     String
-  city         String
-  contactEmail String
-  prices       Json
-  totalTickets Int
-  genre        String[]
+  city         String?
+  contactEmail String?
+  prices       Json?
+  totalTickets Int        @default(0)
+  genre        String[]   @default([])
   tickets      Ticket[]
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  organizerId  String
-  organizer    Organizer @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  organizerId  String?
+  organizer    Organizer? @relation(fields: [organizerId], references: [id], onDelete: SetNull)
+  creatorId    String?
+  creator      User?      @relation("EventCreator", fields: [creatorId], references: [id], onDelete: SetNull)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
 
   @@index([startDate])
-  @@index([organizerId])
   @@map("event")
 }
 
-model Organizer {
-  id          String   @id
-  name        String
-  description String
-  image       String?
-  coverImage  String?
-  links       Json
-  events      Event[]
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@map("organizer")
-}
-
 model Session {
-  id        String   @id
+  id        String   @id @default(cuid())
   expiresAt DateTime
   token     String
   createdAt DateTime @default(now())
@@ -95,7 +84,7 @@ model Session {
 }
 
 model Account {
-  id                    String    @id
+  id                    String    @id @default(cuid())
   accountId             String
   providerId            String
   userId                String
@@ -116,7 +105,7 @@ model Account {
 }
 
 model Verification {
-  id         String   @id
+  id         String   @id @default(cuid())
   identifier String
   value      String
   expiresAt  DateTime
@@ -126,4 +115,16 @@ model Verification {
   @@unique([identifier, value])
   @@index([identifier])
   @@map("verification")
+}
+
+model Organizer {
+  id        String   @id @default(cuid())
+  name      String
+  email     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  events    Event[]
+
+  @@unique([name])
+  @@map("organizer")
 }

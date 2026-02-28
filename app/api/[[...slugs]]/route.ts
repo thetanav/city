@@ -1,12 +1,4 @@
-import { Elysia, t } from "elysia";
-
-export const app = new Elysia({ prefix: "/api" })
-  .get("/", "Hello Nextjs")
-  .post("/", ({ body }) => body, {
-    body: t.Object({
-      name: t.String(),
-    }),
-  });
+import { app } from "@/server/api/app";
 
 export const GET = app.fetch;
 export const POST = app.fetch;

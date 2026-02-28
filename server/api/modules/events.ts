@@ -1,0 +1,179 @@
+import { Elysia, t } from "elysia";
+import { prisma } from "@/lib/prisma";
+
+function totalSeatsFromPrices(prices: unknown) {
+  if (!Array.isArray(prices)) return 0;
+  return prices.reduce((sum, tier) => {
+    if (!tier || typeof tier !== "object") return sum;
+    const seats = Number((tier as { seats?: number }).seats ?? 0);
+    return sum + (Number.isFinite(seats) ? seats : 0);
+  }, 0);
+}
+
+function toDate(value: string) {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed;
+}
+
+export const eventsRoutes = new Elysia({ prefix: "/events" })
+  .get("/", async () =>
+    db.event.findMany({
+      orderBy: { startDate: "asc" },
+      include: { organizer: true },
+    }),
+  )
+  .get(
+    "/:slug",
+    async ({ params, set }) => {
+      const event = await db.event.findUnique({
+        where: { slug: params.slug },
+        include: { organizer: true },
+      });
+
+      if (!event) {
+        set.status = 404;
+        return { message: "Event not found" };
+      }
+
+      return event;
+    },
+    {
+      params: t.Object({ slug: t.String() }),
+    },
+  )
+  .post(
+    "/",
+    async ({ body, set }) => {
+      const startDate = toDate(body.startDate);
+      const endDate = toDate(body.endDate);
+
+      if (!startDate || !endDate) {
+        set.status = 400;
+        return { message: "Invalid start or end date" };
+      }
+
+      try {
+        const totalTickets =
+          body.totalTickets ?? totalSeatsFromPrices(body.prices);
+
+        const event = await prisma.event.create({
+          data: {
+            title: body.title,
+            tagline: body.tagline ?? null,
+            description: body.description,
+            slug: body.slug,
+            startDate,
+            endDate,
+            location: body.location,
+            city: body.city ?? null,
+            contactEmail: body.contactEmail ?? null,
+            posterImage: body.posterImage ?? null,
+            organizerId: body.organizerId ?? null,
+            creatorId: body.creatorId ?? null,
+            prices: body.prices ?? undefined,
+            totalTickets,
+            genre: body.genre ?? [],
+          },
+          include: { organizer: true },
+        });
+
+        return event;
+      } catch (error: unknown) {
+        if (
+          typeof error === "object" &&
+          error !== null &&
+          "code" in error &&
+          (error as { code?: string }).code === "P2002"
+        ) {
+          set.status = 409;
+          return { message: "Slug already exists" };
+        }
+
+        set.status = 500;
+        return { message: "Failed to create event" };
+      }
+    },
+    {
+      body: eventCreateSchema,
+    },
+  )
+  .put(
+    "/:id",
+    async ({ params, body, set }) => {
+      const data: Record<string, unknown> = { ...body };
+
+      if (typeof body.startDate === "string") {
+        const parsed = toDate(body.startDate);
+        if (!parsed) {
+          set.status = 400;
+          return { message: "Invalid start date" };
+        }
+        data.startDate = parsed;
+      }
+
+      if (typeof body.endDate === "string") {
+        const parsed = toDate(body.endDate);
+        if (!parsed) {
+          set.status = 400;
+          return { message: "Invalid end date" };
+        }
+        data.endDate = parsed;
+      }
+
+      if (body.prices && typeof body.totalTickets !== "number") {
+        data.totalTickets = totalSeatsFromPrices(body.prices);
+      }
+
+      try {
+        const event = await db.event.update({
+          where: { id: params.id },
+          data,
+          include: { organizer: true },
+        });
+        return event;
+      } catch (error: unknown) {
+        if (
+          typeof error === "object" &&
+          error !== null &&
+          "code" in error &&
+          (error as { code?: string }).code === "P2025"
+        ) {
+          set.status = 404;
+          return { message: "Event not found" };
+        }
+
+        set.status = 500;
+        return { message: "Failed to update event" };
+      }
+    },
+    {
+      params: t.Object({ id: t.String() }),
+      body: eventUpdateSchema,
+    },
+  )
+  .delete(
+    "/:id",
+    async ({ params, set }) => {
+      try {
+        await db.event.delete({ where: { id: params.id } });
+        return { ok: true };
+      } catch (error: unknown) {
+        if (
+          typeof error === "object" &&
+          error !== null &&
+          "code" in error &&
+          (error as { code?: string }).code === "P2025"
+        ) {
+          set.status = 404;
+          return { message: "Event not found" };
+        }
+
+        set.status = 500;
+        return { message: "Failed to delete event" };
+      }
+    },
+    {
+      params: t.Object({ id: t.String() }),
+    },
+  );
