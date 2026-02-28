@@ -5,6 +5,11 @@ const ticketCreateSchema = t.Object({
   tierName: t.String(),
   qty: t.Number(),
   eventId: t.String(),
+  unitPrice: t.Number(),
+  totalPaid: t.Number(),
+  currency: t.Optional(t.String()),
+  status: t.Optional(t.String()),
+  paymentId: t.Optional(t.String()),
   userId: t.Optional(t.String()),
 });
 
@@ -57,6 +62,11 @@ export const ticketsRoutes = new Elysia({ prefix: "/tickets" })
             tierName: body.tierName,
             qty: body.qty,
             eventId: body.eventId,
+            unitPrice: body.unitPrice,
+            totalPaid: body.totalPaid,
+            currency: body.currency ?? "usd",
+            status: body.status ?? "paid",
+            paymentId: body.paymentId ?? null,
             userId: body.userId ?? null,
           },
           include: { event: true },

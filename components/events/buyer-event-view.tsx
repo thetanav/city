@@ -182,28 +182,37 @@ export default function BuyerEventView({ slug }: { slug: string }) {
     if (selectedTiers.length === 0 || !event) return;
     setBusy(true);
     try {
-      await Promise.all(
-        selectedTiers.map((t) =>
-          fetch("/api/tickets", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              tierName: t.name,
-              qty: t.qty,
-              eventId: event.id,
-            }),
-          }).then((res) => {
-            if (!res.ok) throw new Error("Failed to create ticket");
-            return res.json();
-          }),
-        ),
-      );
+      const response = await fetch("/api/payments/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          eventId: event.id,
+          tiers: selectedTiers.map((t) => ({
+            id: t.id,
+            name: t.name,
+            qty: t.qty,
+          })),
+        }),
+      });
 
-      setPurchased(true);
-      setSelections({});
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        const message =
+          body && typeof body.message === "string"
+            ? body.message
+            : "Failed to start checkout";
+        throw new Error(message);
+      }
+
+      const payload = (await response.json()) as { url?: string };
+      if (!payload.url) {
+        throw new Error("Checkout session not available");
+      }
+
+      window.location.href = payload.url;
     } catch (err) {
       console.error(err);
-      alert("Failed to complete purchase. Please try again.");
+      alert("Failed to start checkout. Please try again.");
     } finally {
       setBusy(false);
     }

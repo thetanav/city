@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.2.0",
+    "@better-auth/stripe": "^1.4.20",
     "@elysiajs/eden": "^1.4.8",
     "@prisma/adapter-pg": "^7.4.2",
     "@prisma/client": "^7.4.2",
@@ -29,6 +30,7 @@
     "react-dom": "19.2.3",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
+    "stripe": "^20.0.0",
     "tailwind-merge": "^3.5.0"
   },
   "devDependencies": {
