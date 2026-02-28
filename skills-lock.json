@@ -10,6 +10,11 @@
       "source": "better-auth/skills",
       "sourceType": "github",
       "computedHash": "63689cc54dad93d286af948ab1792e755e7063541ffe90e248eed6523b0748a0"
+    },
+    "elysiajs": {
+      "source": "elysiajs/skills",
+      "sourceType": "github",
+      "computedHash": "55268e69a2c766ed67e56a0db57544f60cc52dba0c7f024a974baf965e525e1b"
     }
   }
 }
