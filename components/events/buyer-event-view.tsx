@@ -151,7 +151,7 @@ export default function BuyerEventView({ slug }: { slug: string }) {
     if (selectedTiers.length === 0 || !event) return;
     setBusy(true);
     try {
-      const response = await fetch("/api/auth/stripe/checkout", {
+      const response = await fetch("/api/payments/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

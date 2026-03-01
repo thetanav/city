@@ -18,6 +18,10 @@ export const auth = betterAuth({
       stripeClient,
       stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET!,
       createCustomerOnSignUp: true,
+      onEvent: async (event) => {
+        // Log all Stripe events received through the Better Auth webhook endpoint
+        console.log(`[better-auth/stripe] Event received: ${event.type}`);
+      },
     }),
   ],
   database: prismaAdapter(prisma, {

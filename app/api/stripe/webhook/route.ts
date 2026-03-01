@@ -1,7 +1,14 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { stripeClient } from "@/lib/stripe";
+import { sendTicketConfirmationEmail } from "@/lib/email";
 import Stripe from "stripe";
+
+type CreatedTicket = {
+  tierName: string;
+  qty: number;
+  unitPrice: number;
+};
 
 async function createTicketsFromSession(session: Stripe.Checkout.Session) {
   const metadata = session.metadata ?? {};
@@ -27,6 +34,8 @@ async function createTicketsFromSession(session: Stripe.Checkout.Session) {
   if (!event) return;
 
   const tiers = Array.isArray(event.prices) ? event.prices : [];
+
+  const createdTickets: CreatedTicket[] = [];
 
   for (const item of items) {
     const name = item.description ?? "General";
@@ -56,6 +65,37 @@ async function createTicketsFromSession(session: Stripe.Checkout.Session) {
         userId,
       },
     });
+
+    createdTickets.push({ tierName: name, qty, unitPrice: resolvedPrice });
+  }
+
+  // Send confirmation email
+  if (userId && createdTickets.length > 0) {
+    try {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { email: true, name: true },
+      });
+
+      if (user?.email) {
+        const totalAmount = fullSession.amount_total ?? 0;
+
+        await sendTicketConfirmationEmail({
+          to: user.email,
+          userName: user.name || "there",
+          eventTitle: event.title,
+          eventDate: event.startDate.toISOString(),
+          eventEndDate: event.endDate.toISOString(),
+          eventLocation: event.location,
+          tickets: createdTickets,
+          totalAmount,
+          eventSlug: event.slug,
+        });
+      }
+    } catch (emailError) {
+      // Log but don't fail the webhook if email fails
+      console.error("[webhook] Failed to send confirmation email:", emailError);
+    }
   }
 }
 

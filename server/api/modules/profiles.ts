@@ -15,8 +15,6 @@ export const profilesRoutes = new Elysia({ prefix: "/profiles" })
         id: true,
         name: true,
         email: true,
-        handle: true,
-        bio: true,
         image: true,
       },
     });
@@ -33,16 +31,12 @@ export const profilesRoutes = new Elysia({ prefix: "/profiles" })
       throw new Error("Unauthorized");
     }
 
-    const { name, handle, bio } = body as {
+    const { name } = body as {
       name?: string;
-      handle?: string;
-      bio?: string;
     };
 
-    const updateData: any = {};
+    const updateData: Record<string, string> = {};
     if (name !== undefined) updateData.name = name;
-    if (handle !== undefined) updateData.handle = handle;
-    if (bio !== undefined) updateData.bio = bio;
 
     const user = await prisma.user.update({
       where: { id: session.user.id },
@@ -51,8 +45,6 @@ export const profilesRoutes = new Elysia({ prefix: "/profiles" })
         id: true,
         name: true,
         email: true,
-        handle: true,
-        bio: true,
         image: true,
       },
     });

@@ -44,18 +44,36 @@ function getTierPrice(tier: RawTier) {
     : 0;
 }
 
-function assertSelections(
-  selections: TierSelection[],
-  tiers: RawTier[],
-) {
+function assertSelections(selections: TierSelection[], tiers: RawTier[]) {
   const errors: string[] = [];
   const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [];
   let subtotalCents = 0;
+  const tierById = new Map<string, RawTier>();
+  const tierByName = new Map<string, RawTier>();
+  const nameCounts = new Map<string, number>();
+
+  tiers.forEach((tier) => {
+    if (tier.id) tierById.set(tier.id, tier);
+    const nameKey = typeof tier.name === "string" ? tier.name.trim() : "";
+    if (!nameKey) return;
+    nameCounts.set(nameKey, (nameCounts.get(nameKey) ?? 0) + 1);
+    if (!tierByName.has(nameKey)) tierByName.set(nameKey, tier);
+  });
 
   selections.forEach((selection, index) => {
     const qty = Math.max(0, Math.floor(selection.qty));
     if (qty <= 0) return;
-    const matchingTier = tiers.find((tier) => tier.id === selection.id);
+    let matchingTier = selection.id ? tierById.get(selection.id) : undefined;
+
+    if (!matchingTier) {
+      const nameKey = selection.name.trim();
+      const nameCount = nameCounts.get(nameKey) ?? 0;
+      if (nameCount > 1) {
+        errors.push(`Multiple tiers named ${selection.name}`);
+        return;
+      }
+      if (nameCount === 1) matchingTier = tierByName.get(nameKey);
+    }
 
     if (!matchingTier) {
       errors.push(`Unknown tier selection: ${selection.name}`);
@@ -96,7 +114,7 @@ export const paymentsRoutes = new Elysia({ prefix: "/payments" }).post(
   "/checkout",
   async ({ request, body, set }) => {
     const session = await auth.api.getSession({ headers: request.headers });
-
+    // console.log("Checkout session:", { session, body });
     if (!session?.user) {
       set.status = 401;
       return { message: "Unauthorized" };
@@ -112,7 +130,18 @@ export const paymentsRoutes = new Elysia({ prefix: "/payments" }).post(
     }
 
     const tiers = normalizePrices(event.prices);
+    // console.log("Event tiers:", { body: body.tiers, normalized: tiers });
+    // body: [
+    //   { id: 'tier-1', name: 'General', qty: 2 },
+    //   { id: 'tier-2', name: 'VIP', qty: 1 }
+    // ],
+    // normalized: [
+    //   { name: 'General', price: 25, seats: 120 },
+    //   { name: 'VIP', price: 75, seats: 25 }
+    // ]
     const selections = body.tiers.filter((tier) => tier.qty > 0);
+    //   { id: 'tier-1', name: 'General', qty: 2 },
+    //   { id: 'tier-2', name: 'VIP', qty: 1 }
     const { errors, lineItems, subtotalCents } = assertSelections(
       selections,
       tiers,
@@ -128,7 +157,10 @@ export const paymentsRoutes = new Elysia({ prefix: "/payments" }).post(
       return { message: "No ticket selections" };
     }
 
-    const feeCents = Math.min(500, Math.max(0, Math.round(subtotalCents * 0.02)));
+    const feeCents = Math.min(
+      500,
+      Math.max(0, Math.round(subtotalCents * 0.02)),
+    );
 
     if (feeCents > 0) {
       lineItems.push({
@@ -146,13 +178,14 @@ export const paymentsRoutes = new Elysia({ prefix: "/payments" }).post(
       });
     }
 
-    const siteUrl = process.env.BETTER_AUTH_URL ?? process.env.NEXT_PUBLIC_SITE_URL;
-
+    const siteUrl = process.env.BETTER_AUTH_URL;
+    console.log("Site URL:", siteUrl);
     if (!siteUrl) {
       set.status = 500;
       return { message: "Missing site URL" };
     }
 
+    console.log("Creating Stripe session with line items:", lineItems);
     const stripeSession = await stripeClient.checkout.sessions.create({
       mode: "payment",
       line_items: lineItems,
@@ -163,6 +196,10 @@ export const paymentsRoutes = new Elysia({ prefix: "/payments" }).post(
         userId: session.user.id,
         eventId: event.id,
       },
+    });
+    console.log("Created Stripe session:", {
+      id: stripeSession.id,
+      url: stripeSession.url,
     });
 
     return { url: stripeSession.url };
