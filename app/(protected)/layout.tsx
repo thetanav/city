@@ -12,5 +12,5 @@ export default async function Layout({
 
   if (!session) return null;
 
-  return children;
+  return <main className="max-w-5xl mx-auto px-4">{children}</main>;
 }

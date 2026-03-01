@@ -9,7 +9,7 @@ export const Navbar = async () => {
   });
 
   return (
-    <nav className="sticky top-0 z-50 w-full px-8 h-16 border-b bg-background flex items-center justify-between">
+    <nav className="sticky top-0 z-50 w-full px-8 h-16 border-b bg-background/50 backdrop-blur-2xl flex items-center justify-between">
       <div className="flex items-center gap-6">
         <Link href="/" className="font-semibold">
           <Image
@@ -33,9 +33,14 @@ export const Navbar = async () => {
             Explore
           </Link>
           <Link
-            href="/events/my"
+            href="/dashboard"
             className="text-muted-foreground hover:text-foreground transition-colors">
-            My Events
+            Dashboard
+          </Link>
+          <Link
+            href="/events/new"
+            className="text-muted-foreground hover:text-foreground transition-colors">
+            Create Event
           </Link>
         </nav>
       </div>
