@@ -12,6 +12,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
@@ -52,15 +53,15 @@ export default function EventCreator() {
   const [tagline, setTagline] = React.useState("");
   const [description, setDescription] = React.useState("");
   const [location, setLocation] = React.useState("");
+  const [contactEmail, setContactEmail] = React.useState("");
   const [startAt, setStartAt] = React.useState("");
   const [endAt, setEndAt] = React.useState("");
+  const [hasEndDate, setHasEndDate] = React.useState(true);
 
   const [slug, setSlug] = React.useState("");
   const [slugTouched, setSlugTouched] = React.useState(false);
 
-  const [coverFile, setCoverFile] = React.useState<File | null>(null);
-  const [coverUrl, setCoverUrl] = React.useState<string | null>(null);
-  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+  const [coverUrl, setCoverUrl] = React.useState("");
 
   const [tiers, setTiers] = React.useState<Tier[]>([
     {
@@ -86,14 +87,8 @@ export default function EventCreator() {
   }, [title, slugTouched]);
 
   React.useEffect(() => {
-    if (!coverFile) {
-      setCoverUrl(null);
-      return;
-    }
-    const url = URL.createObjectURL(coverFile);
-    setCoverUrl(url);
-    return () => URL.revokeObjectURL(url);
-  }, [coverFile]);
+    if (!hasEndDate && endAt) setEndAt("");
+  }, [hasEndDate, endAt]);
 
   const slugOk = slug.length === 0 ? true : isValidSlug(slug);
   const totalSeats = tiers.reduce((sum, t) => sum + (Number(t.seats) || 0), 0);
@@ -102,15 +97,6 @@ export default function EventCreator() {
       .map((t) => Number(t.price))
       .filter((n) => Number.isFinite(n) && n >= 0),
   );
-
-  function onPickCover(file: File | null) {
-    if (!file) {
-      setCoverFile(null);
-      return;
-    }
-    if (!file.type.startsWith("image/")) return;
-    setCoverFile(file);
-  }
 
   function onAddTier() {
     setTiers((prev) => [
@@ -128,6 +114,7 @@ export default function EventCreator() {
   }
 
   async function createEvent() {
+    const normalizedDescription = description.replace(/\r\n/g, "\n");
     const prices = tiers.map((tier) => ({
       id: tier.id,
       name: tier.name || "General",
@@ -142,14 +129,14 @@ export default function EventCreator() {
       body: JSON.stringify({
         title,
         tagline,
-        description,
+        description: normalizedDescription,
         slug,
         startDate: startAt,
-        endDate: endAt,
+        endDate: hasEndDate ? endAt : null,
         location,
         city: "",
-        contactEmail: "",
-        posterImage: coverFile ? coverFile.name : null,
+        contactEmail: contactEmail.trim() || null,
+        posterImage: coverUrl.trim() || null,
         prices,
         totalTickets: totalSeats,
         genre: [],
@@ -185,9 +172,7 @@ export default function EventCreator() {
       <div className="space-y-1 mb-8">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Link2 className="size-3.5" />
-          <span className="font-mono text-xs">
-            /e/{slug || "your-event"}
-          </span>
+          <span className="font-mono text-xs">/e/{slug || "your-event"}</span>
         </div>
         <h1 className="text-2xl font-semibold tracking-tight">
           Create an event
@@ -199,16 +184,13 @@ export default function EventCreator() {
 
       <form
         onSubmit={onSubmit}
-        className="grid gap-6 lg:grid-cols-[1.25fr_.85fr]"
-      >
+        className="grid gap-6 lg:grid-cols-[1.25fr_.85fr]">
         <div className="grid gap-6">
           {/* Event Details */}
           <Card>
             <CardHeader>
               <CardTitle>Event details</CardTitle>
-              <CardDescription>
-                The basics people see first.
-              </CardDescription>
+              <CardDescription>The basics people see first.</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-4">
               <div className="grid gap-2">
@@ -234,7 +216,9 @@ export default function EventCreator() {
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="description">Description</Label>
+                <Label htmlFor="description">
+                  Description (support markdown)
+                </Label>
                 <textarea
                   id="description"
                   value={description}
@@ -242,7 +226,7 @@ export default function EventCreator() {
                   placeholder="What is it? Who is it for?"
                   className={cn(
                     "min-h-28 w-full resize-y rounded-md border bg-transparent px-3 py-2 text-sm shadow-xs outline-none",
-                    "placeholder:text-muted-foreground",
+                    "placeholder:text-muted-foreground font-mono",
                     "focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]",
                   )}
                 />
@@ -259,12 +243,24 @@ export default function EventCreator() {
                   />
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="endAt">End</Label>
+                  <div className="flex items-center justify-between gap-3">
+                    <Label htmlFor="endAt">End</Label>
+                    <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Checkbox
+                        checked={hasEndDate}
+                        onCheckedChange={(value) =>
+                          setHasEndDate(value === true)
+                        }
+                      />
+                      Has end date
+                    </label>
+                  </div>
                   <Input
                     id="endAt"
                     type="datetime-local"
                     value={endAt}
                     onChange={(e) => setEndAt(e.target.value)}
+                    disabled={!hasEndDate}
                   />
                 </div>
               </div>
@@ -277,6 +273,18 @@ export default function EventCreator() {
                   onChange={(e) => setLocation(e.target.value)}
                   placeholder="Warehouse 11, Downtown"
                   autoComplete="off"
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="contactEmail">Contact email</Label>
+                <Input
+                  id="contactEmail"
+                  type="email"
+                  value={contactEmail}
+                  onChange={(e) => setContactEmail(e.target.value)}
+                  placeholder="hello@nightmarket.com"
+                  autoComplete="email"
                 />
               </div>
             </CardContent>
@@ -311,8 +319,8 @@ export default function EventCreator() {
               </div>
               {!slugOk && (
                 <p className="text-xs text-destructive">
-                  Slug must be at least 3 characters and only use a-z, 0-9,
-                  and hyphens.
+                  Slug must be at least 3 characters and only use a-z, 0-9, and
+                  hyphens.
                 </p>
               )}
             </CardContent>
@@ -329,10 +337,7 @@ export default function EventCreator() {
             <CardContent className="grid gap-4">
               <div className="grid gap-3">
                 {tiers.map((tier) => (
-                  <div
-                    key={tier.id}
-                    className="rounded-lg border p-4"
-                  >
+                  <div key={tier.id} className="rounded-lg border p-4">
                     <div className="grid gap-3 sm:grid-cols-[1.2fr_.7fr_.7fr_auto] sm:items-end">
                       <div className="grid gap-2">
                         <Label className="text-xs text-muted-foreground">
@@ -385,8 +390,7 @@ export default function EventCreator() {
                           variant="outline"
                           size="icon"
                           onClick={() => onRemoveTier(tier.id)}
-                          aria-label="Remove tier"
-                        >
+                          aria-label="Remove tier">
                           <Trash2 className="size-4" />
                         </Button>
                       </div>
@@ -437,90 +441,61 @@ export default function EventCreator() {
           <Card className="sticky top-20">
             <CardHeader>
               <CardTitle>Cover image</CardTitle>
-              <CardDescription>
-                Upload a wide image. Drag & drop works.
-              </CardDescription>
+              <CardDescription>Paste an image URL.</CardDescription>
             </CardHeader>
             <CardContent>
-              <div
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                }}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  const file = e.dataTransfer.files?.[0] ?? null;
-                  onPickCover(file);
-                }}
-                className="relative overflow-hidden rounded-lg border aspect-[16/10] bg-muted"
-              >
-                {coverUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={coverUrl}
-                    alt="Cover preview"
-                    className="h-full w-full object-cover"
+              <div className="grid gap-3">
+                <div className="grid gap-2">
+                  <Label htmlFor="coverUrl">Image URL</Label>
+                  <Input
+                    id="coverUrl"
+                    value={coverUrl}
+                    onChange={(e) => setCoverUrl(e.target.value)}
+                    placeholder="https://images.example.com/cover.jpg"
+                    autoComplete="off"
                   />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center">
-                    <div className="flex flex-col items-center gap-2 text-center">
-                      <ImageIcon className="size-8 text-muted-foreground" />
-                      <div>
-                        <p className="text-sm font-medium">Drop an image</p>
-                        <p className="text-xs text-muted-foreground">
-                          or click to upload
-                        </p>
+                </div>
+                <div className="relative overflow-hidden rounded-lg border aspect-[16/10] bg-muted">
+                  {coverUrl.trim() ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={coverUrl}
+                      alt="Cover preview"
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center">
+                      <div className="flex flex-col items-center gap-2 text-center">
+                        <ImageIcon className="size-8 text-muted-foreground" />
+                        <div>
+                          <p className="text-sm font-medium">
+                            Paste an image URL
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Preview appears here
+                          </p>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )}
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="absolute inset-0 focus:outline-none"
-                >
-                  <span className="sr-only">Upload cover image</span>
-                </button>
-              </div>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => onPickCover(e.target.files?.[0] ?? null)}
-              />
-              <div className="mt-3 flex items-center justify-between">
-                <p className="text-xs text-muted-foreground">
-                  {coverFile ? coverFile.name : "No image selected"}
-                </p>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setCoverFile(null);
-                    if (fileInputRef.current) fileInputRef.current.value = "";
-                  }}
-                  disabled={!coverFile}
-                >
-                  Remove
-                </Button>
+                  )}
+                </div>
+                <div className="flex items-center justify-end">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCoverUrl("")}
+                    disabled={!coverUrl.trim()}>
+                    Clear
+                  </Button>
+                </div>
               </div>
             </CardContent>
             <CardFooter className="flex flex-col gap-3 sm:flex-row sm:justify-end">
               <Button
-                type="button"
-                variant="outline"
-                className="w-full sm:w-auto"
-              >
-                Save draft
-              </Button>
-              <Button
                 type="submit"
                 className="w-full sm:w-auto"
-                disabled={!title || !slug || !slugOk || tiers.length === 0}
-              >
+                disabled={!title || !slug || !slugOk || tiers.length === 0}>
                 Create event
               </Button>
             </CardFooter>

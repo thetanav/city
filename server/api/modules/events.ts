@@ -22,12 +22,11 @@ const eventCreateSchema = t.Object({
   description: t.String(),
   slug: t.String(),
   startDate: t.String(),
-  endDate: t.String(),
+  endDate: t.Optional(t.String()),
   location: t.String(),
   city: t.Optional(t.String()),
-  contactEmail: t.Optional(t.String()),
+  contactEmail: t.Optional(t.String({ format: "email" })),
   posterImage: t.Optional(t.String()),
-  organizerId: t.Optional(t.String()),
   creatorId: t.Optional(t.String()),
   prices: t.Optional(t.Array(t.Object({
     name: t.String(),
@@ -44,7 +43,6 @@ export const eventsRoutes = new Elysia({ prefix: "/events" })
   .get("/", async () =>
     prisma.event.findMany({
       orderBy: { startDate: "asc" },
-      include: { organizer: true },
     }),
   )
   .get(
@@ -52,7 +50,6 @@ export const eventsRoutes = new Elysia({ prefix: "/events" })
     async ({ params, set }) => {
       const event = await prisma.event.findUnique({
         where: { slug: params.slug },
-        include: { organizer: true },
       });
 
       if (!event) {
@@ -70,11 +67,17 @@ export const eventsRoutes = new Elysia({ prefix: "/events" })
     "/",
     async ({ body, set }) => {
       const startDate = toDate(body.startDate);
-      const endDate = toDate(body.endDate);
 
-      if (!startDate || !endDate) {
+      if (!startDate) {
         set.status = 400;
-        return { message: "Invalid start or end date" };
+        return { message: "Invalid start date" };
+      }
+
+      const endDate = body.endDate ? toDate(body.endDate) : undefined;
+
+      if (body.endDate && !endDate) {
+        set.status = 400;
+        return { message: "Invalid end date" };
       }
 
       try {
@@ -88,18 +91,16 @@ export const eventsRoutes = new Elysia({ prefix: "/events" })
             description: body.description,
             slug: body.slug,
             startDate,
-            endDate,
+            endDate: endDate ?? startDate,
             location: body.location,
             city: body.city ?? null,
             contactEmail: body.contactEmail ?? null,
             posterImage: body.posterImage ?? null,
-            organizerId: body.organizerId ?? null,
             creatorId: body.creatorId ?? null,
             prices: body.prices ?? undefined,
             totalTickets,
             genre: body.genre ?? [],
           },
-          include: { organizer: true },
         });
 
         return event;
@@ -153,7 +154,6 @@ export const eventsRoutes = new Elysia({ prefix: "/events" })
         const event = await prisma.event.update({
           where: { id: params.id },
           data,
-          include: { organizer: true },
         });
         return event;
       } catch (error: unknown) {

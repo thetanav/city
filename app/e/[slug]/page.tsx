@@ -3,7 +3,7 @@ import BuyerEventView from "@/components/events/buyer-event-view";
 export default async function EventBuyerPage({
   params,
 }: {
-  params: Promise<{ slug: string }>;
+  params: { slug: string };
 }) {
   const { slug } = await params;
 

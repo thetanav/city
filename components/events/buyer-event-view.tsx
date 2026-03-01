@@ -3,7 +3,6 @@
 import * as React from "react";
 import {
   CalendarDays,
-  Check,
   CornerDownRight,
   MapPin,
   Minus,
@@ -21,33 +20,10 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import type { Event as ApiEvent } from "@/generated/prisma";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-
-type Tier = {
-  id: string;
-  name: string;
-  price: number;
-  remaining: number;
-  note?: string;
-};
-
-type ViewEvent = {
-  slug: string;
-  title: string;
-  tagline: string;
-  description: string;
-  location: string;
-  start: string | Date;
-  end: string | Date;
-  cover: string;
-  tiers: Tier[];
-  contactEmail: string | null;
-  totalTickets?: number;
-};
 
 function formatMoney(n: number) {
   return new Intl.NumberFormat("en-US", {
@@ -57,13 +33,15 @@ function formatMoney(n: number) {
   }).format(n);
 }
 
-type RawTier = {
-  id?: string;
-  name?: string;
-  price?: number;
-  remaining?: number;
+type Tier = {
+  id: string;
+  name: string;
+  price: number;
+  seats: number;
   note?: string;
 };
+
+type SelectedTier = Tier & { qty: number };
 
 function normalizeTiers(prices: unknown, totalTickets: number | undefined) {
   if (!Array.isArray(prices)) return [] as Tier[];
@@ -76,20 +54,20 @@ function normalizeTiers(prices: unknown, totalTickets: number | undefined) {
         id: `tier-${index + 1}`,
         name: `Tier ${index + 1}`,
         price: 0,
-        remaining: fallbackRemaining,
+        seats: fallbackRemaining,
+        note: "Invalid tier data",
       };
     }
 
-    const raw = item as RawTier;
+    const raw = item as Tier;
 
     return {
-      id: typeof raw.id === "string" ? raw.id : `tier-${index + 1}`,
-      name: typeof raw.name === "string" ? raw.name : `Tier ${index + 1}`,
-      price: typeof raw.price === "number" ? raw.price : 0,
-      remaining:
-        typeof raw.remaining === "number" ? raw.remaining : fallbackRemaining,
-      note: typeof raw.note === "string" ? raw.note : undefined,
-    };
+      id: `tier-${index + 1}`,
+      name: raw.name,
+      price: raw.price,
+      seats: raw.seats,
+      note: raw.note,
+    } satisfies Tier;
   });
 }
 
@@ -100,81 +78,72 @@ export default function BuyerEventView({ slug }: { slug: string }) {
 
   React.useEffect(() => {
     let active = true;
+    const controller = new AbortController();
 
-    setLoading(true);
-    setLoadError(null);
+    const loadEvent = async () => {
+      setLoading(true);
+      setLoadError(null);
 
-    fetch(`/api/events/${encodeURIComponent(slug)}`)
-      .then(async (res) => {
-        if (!res.ok) {
-          const body = await res.json().catch(() => null);
+      try {
+        const response = await fetch(
+          `/api/events/${encodeURIComponent(slug)}`,
+          { signal: controller.signal },
+        );
+
+        if (!response.ok) {
+          const body = await response.json().catch(() => null);
           const message =
             body && typeof body.message === "string"
               ? body.message
               : "Failed to load event";
           throw new Error(message);
         }
-        return res.json();
-      })
-      .then((data) => {
-        if (!active) return;
-        setEvent(data as ApiEvent);
-      })
-      .catch((err: unknown) => {
-        if (!active) return;
+
+        const data = (await response.json()) as ApiEvent;
+        if (active) setEvent(data);
+      } catch (err) {
+        if (!active || controller.signal.aborted) return;
         const message =
           err instanceof Error ? err.message : "Failed to load event";
         setLoadError(message);
         setEvent(null);
-      })
-      .finally(() => {
-        if (!active) return;
-        setLoading(false);
-      });
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+
+    loadEvent();
 
     return () => {
       active = false;
+      controller.abort();
     };
   }, [slug]);
 
-  const viewEvent = React.useMemo<ViewEvent | null>(() => {
-    if (!event) return null;
-    const tiers = normalizeTiers(event.prices, event.totalTickets);
-
-    return {
-      slug: event.slug,
-      title: event.title,
-      tagline: (event as any).organizer?.name ?? "Live event",
-      description: event.description,
-      location: `${event.location}, ${event.city}`,
-      start: event.startDate,
-      end: event.endDate,
-      cover: event.posterImage ?? "",
-      tiers,
-      contactEmail: event.contactEmail ?? null,
-      totalTickets: event.totalTickets,
-    };
+  const tiers = React.useMemo<Tier[]>(() => {
+    if (!event) return [];
+    return normalizeTiers(event.prices, event.totalTickets);
   }, [event]);
 
   const [selections, setSelections] = React.useState<Record<string, number>>(
     {},
   );
-  const [purchased, setPurchased] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
 
   React.useEffect(() => {
     setSelections({});
-    setPurchased(false);
-  }, [viewEvent?.slug]);
+  }, [event?.slug]);
 
-  const selectedTiers = React.useMemo(() => {
-    if (!viewEvent) return [];
-    return viewEvent.tiers
-      .filter((t) => selections[t.id] > 0)
-      .map((t) => ({ ...t, qty: selections[t.id] }));
-  }, [viewEvent, selections]);
+  const selectedTiers = React.useMemo<SelectedTier[]>(() => {
+    return tiers
+      .filter((tier) => selections[tier.id] > 0)
+      .map((tier) => ({ ...tier, qty: selections[tier.id] }));
+  }, [tiers, selections]);
 
-  const subtotal = selectedTiers.reduce((acc, t) => acc + t.price * t.qty, 0);
+  const subtotal = selectedTiers.reduce(
+    (acc, tier) => acc + tier.price * tier.qty,
+    0,
+  );
   const fee = Math.min(5, Math.max(0, Math.round(subtotal * 0.02 * 100) / 100));
   const total = subtotal + fee;
 
@@ -182,16 +151,12 @@ export default function BuyerEventView({ slug }: { slug: string }) {
     if (selectedTiers.length === 0 || !event) return;
     setBusy(true);
     try {
-      const response = await fetch("/api/payments/checkout", {
+      const response = await fetch("/api/auth/stripe/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           eventId: event.id,
-          tiers: selectedTiers.map((t) => ({
-            id: t.id,
-            name: t.name,
-            qty: t.qty,
-          })),
+          tiers: selectedTiers.map(({ id, name, qty }) => ({ id, name, qty })),
         }),
       });
 
@@ -238,7 +203,7 @@ export default function BuyerEventView({ slug }: { slug: string }) {
     );
   }
 
-  if (!event || !viewEvent) {
+  if (!event) {
     return (
       <div className="mx-auto w-full max-w-5xl px-4 py-10">
         <div className="rounded-lg border p-8 text-sm text-muted-foreground">
@@ -248,8 +213,7 @@ export default function BuyerEventView({ slug }: { slug: string }) {
     );
   }
 
-  const start = new Date(viewEvent.start);
-  const end = new Date(viewEvent.end);
+  const start = new Date(event.startDate);
   const when = new Intl.DateTimeFormat("en-US", {
     weekday: "short",
     month: "short",
@@ -257,21 +221,27 @@ export default function BuyerEventView({ slug }: { slug: string }) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(start);
-  const until = new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(end);
+
+  let end = null;
+  let until = null;
+  if (event.endDate) {
+    end = new Date(event.endDate);
+    until = new Intl.DateTimeFormat("en-US", {
+      month: "short",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(end);
+  }
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-10">
       {/* Cover Image */}
-      {viewEvent.cover && (
+      {event.posterImage && (
         <div className="rounded-lg overflow-hidden mb-6">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={viewEvent.cover}
+            src={event.posterImage}
             alt="Event cover"
             className="h-56 w-full object-cover sm:h-72"
           />
@@ -280,11 +250,9 @@ export default function BuyerEventView({ slug }: { slug: string }) {
 
       <div className="mb-6">
         <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-          {viewEvent.title}
+          {event.title}
         </h1>
-        <p className="text-muted-foreground mt-1">
-          {viewEvent.tagline}
-        </p>
+        <p className="text-muted-foreground mt-1">{event.tagline}</p>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1.25fr_.85fr]">
@@ -304,28 +272,30 @@ export default function BuyerEventView({ slug }: { slug: string }) {
                   <div>
                     <p className="text-xs text-muted-foreground">When</p>
                     <p className="text-sm font-medium">{when}</p>
-                    <p className="text-sm font-medium inline-flex">
-                      <CornerDownRight className="opacity-60 size-4 mr-1" />
-                      {until}
-                    </p>
+                    {until && (
+                      <p className="text-sm font-medium inline-flex">
+                        <CornerDownRight className="opacity-60 size-4 mr-1" />
+                        {until}
+                      </p>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
                   <MapPin className="mt-0.5 size-4 text-muted-foreground" />
                   <div>
                     <p className="text-xs text-muted-foreground">Where</p>
-                    <p className="text-sm font-medium">
-                      {viewEvent.location}
-                    </p>
+                    <p className="text-sm font-medium">{event.location}</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
                   <Mail className="mt-0.5 size-4 text-muted-foreground" />
                   <div>
                     <p className="text-xs text-muted-foreground">Contact</p>
-                    <p className="text-sm font-medium">
-                      {viewEvent.contactEmail ?? "No contact email provided"}
-                    </p>
+                    <a
+                      className="text-sm font-medium"
+                      href={`mailto:${event.contactEmail}`}>
+                      {event.contactEmail}
+                    </a>
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
@@ -334,17 +304,13 @@ export default function BuyerEventView({ slug }: { slug: string }) {
                     <p className="text-xs text-muted-foreground">
                       Available Tickets
                     </p>
-                    <p className="text-sm font-medium">
-                      {viewEvent.totalTickets}
-                    </p>
+                    <p className="text-sm font-medium">{event.totalTickets}</p>
                   </div>
                 </div>
               </div>
 
-              <div className="prose prose-sm dark:prose-invert max-w-none">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                  {viewEvent.description}
-                </ReactMarkdown>
+              <div className="prose prose-md dark:prose-invert max-w-none mt-3">
+                <ReactMarkdown>{event.description}</ReactMarkdown>
               </div>
             </CardContent>
           </Card>
@@ -358,20 +324,20 @@ export default function BuyerEventView({ slug }: { slug: string }) {
               </CardDescription>
             </CardHeader>
             <CardContent className="grid gap-3">
-              {viewEvent.tiers.map((t: Tier) => {
+              {tiers.map((t) => {
                 const qty = selections[t.id] || 0;
-                const soldOut = t.remaining <= 0;
-                const maxQty = Math.max(0, Math.min(8, t.remaining));
+                const soldOut = t.seats <= 0;
+                const maxQty = Math.max(0, Math.min(8, t.seats));
 
                 return (
                   <div
                     key={t.id}
                     className={cn(
                       "rounded-lg border p-4",
-                      qty > 0 && "border-foreground/30 ring-1 ring-foreground/10",
+                      qty > 0 &&
+                        "border-foreground/30 ring-1 ring-foreground/10",
                       soldOut && "opacity-60",
-                    )}
-                  >
+                    )}>
                     <div className="flex items-start justify-between gap-4">
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-semibold">{t.name}</p>
@@ -397,8 +363,7 @@ export default function BuyerEventView({ slug }: { slug: string }) {
                                 [t.id]: Math.max(0, (prev[t.id] || 0) - 1),
                               }))
                             }
-                            disabled={qty <= 0}
-                          >
+                            disabled={qty <= 0}>
                             <Minus className="size-3" />
                           </Button>
                           <div className="min-w-8 text-center font-mono text-sm">
@@ -412,19 +377,15 @@ export default function BuyerEventView({ slug }: { slug: string }) {
                             onClick={() =>
                               setSelections((prev) => ({
                                 ...prev,
-                                [t.id]: Math.min(
-                                  maxQty,
-                                  (prev[t.id] || 0) + 1,
-                                ),
+                                [t.id]: Math.min(maxQty, (prev[t.id] || 0) + 1),
                               }))
                             }
-                            disabled={qty >= maxQty || soldOut}
-                          >
+                            disabled={qty >= maxQty || soldOut}>
                             <Plus className="size-3" />
                           </Button>
                         </div>
                         <p className="mt-1 text-xs text-muted-foreground text-center">
-                          {soldOut ? "Sold out" : `${t.remaining} left`}
+                          {soldOut ? "Sold out" : `${t.seats} left`}
                         </p>
                       </div>
                     </div>
@@ -480,8 +441,7 @@ export default function BuyerEventView({ slug }: { slug: string }) {
                   {selectedTiers.map((t) => (
                     <div
                       key={t.id}
-                      className="flex items-center justify-between text-sm"
-                    >
+                      className="flex items-center justify-between text-sm">
                       <span>
                         {t.qty}x {t.name}
                       </span>
@@ -510,22 +470,6 @@ export default function BuyerEventView({ slug }: { slug: string }) {
                   </span>
                 </div>
               </div>
-
-              {purchased && (
-                <div className="rounded-lg border p-4">
-                  <div className="flex items-start gap-3">
-                    <Check className="mt-0.5 size-4" />
-                    <div>
-                      <p className="text-sm font-semibold">
-                        Purchase complete
-                      </p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        View your ticket + QR in your tickets.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
             </CardContent>
             <CardFooter className="flex flex-col gap-2 sm:flex-row sm:justify-end">
               <Button
@@ -534,17 +478,14 @@ export default function BuyerEventView({ slug }: { slug: string }) {
                 className="w-full sm:w-auto"
                 onClick={() => {
                   setSelections({});
-                  setPurchased(false);
-                }}
-              >
+                }}>
                 Reset
               </Button>
               <Button
                 type="button"
                 className="w-full sm:w-auto"
                 onClick={onCheckout}
-                disabled={selectedTiers.length === 0 || busy}
-              >
+                disabled={selectedTiers.length === 0 || busy}>
                 {busy ? "Processing..." : "Buy tickets"}
               </Button>
             </CardFooter>

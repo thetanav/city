@@ -32,7 +32,6 @@ async function createTicketsFromSession(session: Stripe.Checkout.Session) {
     const name = item.description ?? "General";
     const qty = item.quantity ?? 1;
     const unitAmount = item.price?.unit_amount ?? 0;
-    const totalPaid = (item.amount_total ?? unitAmount * qty) || 0;
 
     const matchedTier = tiers.find(
       (tier) =>
@@ -52,9 +51,6 @@ async function createTicketsFromSession(session: Stripe.Checkout.Session) {
         tierName: name,
         qty,
         unitPrice: resolvedPrice,
-        totalPaid,
-        currency: fullSession.currency ?? "usd",
-        status: "paid",
         paymentId: fullSession.payment_intent?.toString() ?? null,
         eventId,
         userId,
