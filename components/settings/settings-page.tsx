@@ -71,20 +71,10 @@ export default function SettingsPage() {
 
   const [displayName, setDisplayName] = React.useState(data?.user?.name ?? "");
   const [email, setEmail] = React.useState(data?.user?.email ?? "");
-  const [handle, setHandle] = React.useState("");
   const [bio, setBio] = React.useState("");
-  const [avatarFile, setAvatarFile] = React.useState<File | null>(null);
-  const [avatarUrl, setAvatarUrl] = React.useState<string | null>(null);
-
-  React.useEffect(() => {
-    if (!avatarFile) {
-      setAvatarUrl(null);
-      return;
-    }
-    const url = URL.createObjectURL(avatarFile);
-    setAvatarUrl(url);
-    return () => URL.revokeObjectURL(url);
-  }, [avatarFile]);
+  const [avatarUrl, setAvatarUrl] = React.useState<string | null>(
+    data?.user.image!,
+  );
 
   // Load profile data
   React.useEffect(() => {
@@ -93,7 +83,6 @@ export default function SettingsPage() {
       .then((profile) => {
         setDisplayName(profile.name ?? "");
         setEmail(profile.email ?? "");
-        setHandle(profile.handle ?? "");
         setBio(profile.bio ?? "");
       })
       .catch((err) => {
@@ -206,7 +195,6 @@ export default function SettingsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: displayName,
-          handle: handle || null,
           bio: bio || null,
         }),
       });
@@ -231,10 +219,10 @@ export default function SettingsPage() {
         <div className="flex flex-col gap-2">
           <TabsList className="flex w-full">
             <TabsTrigger value="profile">
-              <UserRound className="size-4" /> Profile
+              <UserRound className="size-4 opacity-60" /> Profile
             </TabsTrigger>
             <TabsTrigger value="events">
-              <CalendarDays className="size-4" /> Events
+              <CalendarDays className="size-4 opacity-60" /> Events
             </TabsTrigger>
           </TabsList>
 
@@ -248,34 +236,12 @@ export default function SettingsPage() {
               </CardHeader>
               <form onSubmit={onSaveProfile}>
                 <CardContent className="grid gap-4">
-                  <div className="grid gap-2">
-                    <Label>Avatar</Label>
-                    <div className="flex items-center gap-4">
-                      <div className="relative grid size-14 place-items-center overflow-hidden rounded-lg border bg-muted">
-                        {avatarUrl ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={avatarUrl}
-                            alt="Avatar preview"
-                            className="h-full w-full object-cover"
-                          />
-                        ) : (
-                          <ImageIcon className="size-5 text-muted-foreground" />
-                        )}
-                      </div>
-                      <div className="grid gap-1">
-                        <Input
-                          type="file"
-                          accept="image/*"
-                          onChange={(e) =>
-                            setAvatarFile(e.target.files?.[0] ?? null)
-                          }
-                        />
-                        <p className="text-xs text-muted-foreground">
-                          Local preview only.
-                        </p>
-                      </div>
-                    </div>
+                  <div>
+                    <img
+                      src={avatarUrl!}
+                      alt={displayName}
+                      className="h-16 w-16 object-cover rounded-xl border"
+                    />
                   </div>
 
                   <div className="grid gap-4 sm:grid-cols-2">
@@ -286,23 +252,6 @@ export default function SettingsPage() {
                         value={displayName}
                         onChange={(e) => setDisplayName(e.target.value)}
                         placeholder="Your name"
-                        autoComplete="off"
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="handle">Handle</Label>
-                      <Input
-                        id="handle"
-                        value={handle}
-                        onChange={(e) =>
-                          setHandle(
-                            e.target.value
-                              .toLowerCase()
-                              .replace(/[^a-z0-9_]/g, "")
-                              .slice(0, 24),
-                          )
-                        }
-                        placeholder="your_handle"
                         autoComplete="off"
                       />
                     </div>
@@ -575,4 +524,3 @@ function EventsPanel({
     </Card>
   );
 }
-

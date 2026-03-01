@@ -17,25 +17,31 @@ export const Navbar = async () => {
             alt="CITY events"
             width={45}
             height={45}
+            loading="eager"
             className="h-6"
           />
         </Link>
         <nav className="hidden md:flex gap-4 text-sm">
+          <Link
+            href="/home"
+            className="text-muted-foreground hover:text-foreground transition-colors">
+            Home
+          </Link>
           <Link
             href="/explore"
             className="text-muted-foreground hover:text-foreground transition-colors">
             Explore
           </Link>
           <Link
-            href="/events/new"
+            href="/events/my"
             className="text-muted-foreground hover:text-foreground transition-colors">
-            Create
+            My Events
           </Link>
         </nav>
       </div>
       <div className="flex items-center gap-2">
         <Link href="/settings">
-          <button className="h-8 w-8 flex items-center justify-center rounded-full overflow-hidden cursor-pointer">
+          <button className="h-7 w-7 flex items-center justify-center rounded-full overflow-hidden cursor-pointer">
             <img
               src={session?.user.image!}
               alt={session?.user.name || "User"}

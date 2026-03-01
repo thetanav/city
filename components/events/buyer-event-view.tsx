@@ -129,10 +129,77 @@ export default function BuyerEventView({ slug }: { slug: string }) {
     {},
   );
   const [busy, setBusy] = React.useState(false);
+  const [paymentNotice, setPaymentNotice] = React.useState<
+    { status: "success"; message: string } | { status: "error"; message: string } | null
+  >(null);
 
   React.useEffect(() => {
     setSelections({});
+    setPaymentNotice(null);
   }, [event?.slug]);
+
+  React.useEffect(() => {
+    if (!event) return;
+    const params = new URLSearchParams(window.location.search);
+    const payment = params.get("payment");
+    const sessionId = params.get("session_id");
+
+    if (payment !== "success" || !sessionId) return;
+
+    let active = true;
+
+    const confirmPayment = async () => {
+      try {
+        const response = await fetch("/api/payments/confirm", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sessionId }),
+        });
+
+        if (!response.ok) {
+          const body = await response.json().catch(() => null);
+          const message =
+            body && typeof body.message === "string"
+              ? body.message
+              : "We could not confirm your payment.";
+          throw new Error(message);
+        }
+
+        const result = (await response.json()) as {
+          status?: string;
+        };
+
+        if (!active) return;
+
+        if (result.status === "processed") {
+          setPaymentNotice({
+            status: "success",
+            message:
+              "Payment confirmed. Your tickets are ready and a confirmation email is on the way.",
+          });
+        } else {
+          setPaymentNotice({
+            status: "success",
+            message:
+              "Payment received. We are finalizing your tickets and will email you shortly.",
+          });
+        }
+      } catch (err) {
+        if (!active) return;
+        const message =
+          err instanceof Error
+            ? err.message
+            : "We could not confirm your payment.";
+        setPaymentNotice({ status: "error", message });
+      }
+    };
+
+    confirmPayment();
+
+    return () => {
+      active = false;
+    };
+  }, [event]);
 
   const selectedTiers = React.useMemo<SelectedTier[]>(() => {
     return tiers
@@ -254,6 +321,18 @@ export default function BuyerEventView({ slug }: { slug: string }) {
         </h1>
         <p className="text-muted-foreground mt-1">{event.tagline}</p>
       </div>
+
+      {paymentNotice && (
+        <div
+          className={cn(
+            "mb-6 rounded-lg border px-4 py-3 text-sm",
+            paymentNotice.status === "success"
+              ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+              : "border-rose-200 bg-rose-50 text-rose-800",
+          )}>
+          {paymentNotice.message}
+        </div>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-[1.25fr_.85fr]">
         <div className="grid gap-6">

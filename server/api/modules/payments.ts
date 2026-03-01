@@ -94,7 +94,7 @@ function assertSelections(selections: TierSelection[], tiers: RawTier[]) {
     lineItems.push({
       quantity: qty,
       price_data: {
-        currency: "usd",
+        currency: "inr",
         unit_amount: unitAmount,
         product_data: {
           name,
@@ -166,7 +166,7 @@ export const paymentsRoutes = new Elysia({ prefix: "/payments" }).post(
       lineItems.push({
         quantity: 1,
         price_data: {
-          currency: "usd",
+          currency: "inr",
           unit_amount: feeCents,
           product_data: {
             name: "Service fee",
