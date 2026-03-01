@@ -1,36 +1,89 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# City - Event Management & Ticketing Platform
 
-## Getting Started
+City is a modern, high-performance event management and ticketing platform built with Next.js 16, ElysiaJS, and Prisma. It provides a seamless experience for creating, discovering, and booking tickets for local events.
 
-First, run the development server:
+## 🚀 Tech Stack
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+- **Frontend:** [Next.js 16 (App Router)](https://nextjs.org/) & [TypeScript](https://www.typescriptlang.org/)
+- **API Engine:** [ElysiaJS](https://elysiajs.com/) (running within Next.js route handlers)
+- **Database:** [PostgreSQL](https://www.postgresql.org/) with [Prisma ORM](https://www.prisma.io/)
+- **Authentication:** [Better Auth](https://www.better-auth.com/) (Google & Email/Password)
+- **Styling:** [Tailwind CSS 4](https://tailwindcss.com/) & [Framer Motion](https://www.framer.com/motion/)
+- **Payments:** [Stripe](https://stripe.com/)
+- **Email:** [Resend](https://resend.com/)
+- **Components:** Radix UI & Shadcn/UI primitives
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## ✨ Key Features
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- **Event Discovery:** Browse and explore upcoming events with a modern, responsive UI.
+- **Event Management:** Create and manage your own events, including venue details, dates, and pricing.
+- **Ticketing System:** Securely purchase tickets for events with real-time availability.
+- **Payment Integration:** Fully integrated checkout flow using Stripe.
+- **User Profiles:** Personalized user settings and ticket history.
+- **Automated Emails:** Ticket confirmations and notifications via Resend.
+- **QR Codes:** Ticket generation with QR codes for easy check-ins.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 🛠️ Getting Started
 
-## Learn More
+### Prerequisites
 
-To learn more about Next.js, take a look at the following resources:
+- [Bun](https://bun.sh/) (Recommended) or Node.js
+- PostgreSQL instance (e.g., [Neon](https://neon.tech/))
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Installation
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+1. Clone the repository:
+   ```bash
+   git clone <repository-url>
+   cd city
+   ```
 
-## Deploy on Vercel
+2. Install dependencies:
+   ```bash
+   bun install
+   ```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+3. Configure environment variables:
+   Create a `.env` file in the root directory and add the following:
+   ```env
+   DATABASE_URL="postgresql://..."
+   NEXT_PUBLIC_APP_URL="http://localhost:3000"
+   BETTER_AUTH_SECRET="..."
+   GOOGLE_CLIENT_ID="..."
+   GOOGLE_CLIENT_SECRET="..."
+   RESEND_API_KEY="..."
+   STRIPE_SECRET_KEY="..."
+   STRIPE_WEBHOOK_SECRET="..."
+   ```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+4. Set up the database:
+   ```bash
+   bun run generate
+   bun run migrate
+   ```
+
+5. Run the development server:
+   ```bash
+   bun dev
+   ```
+
+## 📂 Project Structure
+
+- `app/`: Next.js App Router (Pages, Layouts, Client/Server components)
+- `server/api/`: ElysiaJS API modules (grouped by feature)
+- `components/`: UI and feature-specific components
+- `lib/`: Shared utilities (Auth, Prisma, Stripe, Email)
+- `prisma/`: Database schema and migrations
+
+## 📜 Available Scripts
+
+- `bun dev`: Starts the Next.js development server
+- `bun run build`: Creates a production-ready build
+- `bun run start`: Runs the built application
+- `bun run lint`: Runs ESLint for code quality checks
+- `bun run generate`: Generates the Prisma client
+- `bun run migrate`: Applies database migrations
+
+## 🛡️ License
+
+This project is private and for internal use only.
