@@ -2,6 +2,8 @@ import Link from "next/link";
 import Image from "next/image";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
+import { ModeToggle } from "./mode-toggle";
+import Logo from "./logo";
 
 export const Navbar = async () => {
   const session = await auth.api.getSession({
@@ -11,15 +13,8 @@ export const Navbar = async () => {
   return (
     <nav className="sticky top-0 z-50 w-full px-8 h-16 border-b bg-background/50 backdrop-blur-2xl flex items-center justify-between">
       <div className="flex items-center gap-6">
-        <Link href="/" className="font-semibold">
-          <Image
-            src="/city.svg"
-            alt="CITY events"
-            width={45}
-            height={45}
-            loading="eager"
-            className="h-6"
-          />
+        <Link href="/" className="font-semibold fill-primary text-primary">
+          <Logo className="h-4" />
         </Link>
         <nav className="hidden md:flex gap-4 text-sm">
           <Link
@@ -45,6 +40,7 @@ export const Navbar = async () => {
         </nav>
       </div>
       <div className="flex items-center gap-2">
+        <ModeToggle />
         <Link href="/settings">
           <button className="h-7 w-7 flex items-center justify-center rounded-full overflow-hidden cursor-pointer">
             <img

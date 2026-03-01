@@ -168,7 +168,7 @@ export default function EventCreator() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-4 py-10">
+    <div>
       <div className="space-y-1 mb-8">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Link2 className="size-3.5" />

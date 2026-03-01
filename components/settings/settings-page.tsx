@@ -214,7 +214,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-5xl">
+    <div className="w-full">
       <Tabs defaultValue="profile" className="w-full">
         <div className="flex flex-col gap-2">
           <TabsList className="flex w-full">

@@ -252,7 +252,7 @@ export default function BuyerEventView({ slug }: { slug: string }) {
 
   if (loading) {
     return (
-      <div className="mx-auto w-full max-w-5xl px-4 py-10">
+      <div>
         <div className="rounded-lg border p-8 text-sm text-muted-foreground">
           Loading event...
         </div>
@@ -262,7 +262,7 @@ export default function BuyerEventView({ slug }: { slug: string }) {
 
   if (loadError) {
     return (
-      <div className="mx-auto w-full max-w-5xl px-4 py-10">
+      <div>
         <div className="rounded-lg border p-8 text-sm text-muted-foreground">
           {loadError}
         </div>
@@ -272,7 +272,7 @@ export default function BuyerEventView({ slug }: { slug: string }) {
 
   if (!event) {
     return (
-      <div className="mx-auto w-full max-w-5xl px-4 py-10">
+      <div>
         <div className="rounded-lg border p-8 text-sm text-muted-foreground">
           Event not found.
         </div>
@@ -302,7 +302,7 @@ export default function BuyerEventView({ slug }: { slug: string }) {
   }
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-4 py-10">
+    <div>
       {/* Cover Image */}
       {event.posterImage && (
         <div className="rounded-lg overflow-hidden mb-6">

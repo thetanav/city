@@ -77,7 +77,7 @@ export default function HomePage({
   }
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-10 space-y-10">
+    <div className="space-y-10">
       {/* Header */}
       <section className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>

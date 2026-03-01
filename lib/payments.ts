@@ -22,6 +22,21 @@ export type TicketCreateResult = {
   createdTickets: CreatedTicket[];
 };
 
+type PriceTier = {
+  name?: string;
+  price?: number;
+  seats?: number;
+};
+
+function totalSeatsFromPrices(prices: unknown) {
+  if (!Array.isArray(prices)) return 0;
+  return prices.reduce((sum, tier) => {
+    if (!tier || typeof tier !== "object") return sum;
+    const seats = Number((tier as { seats?: number }).seats ?? 0);
+    return sum + (Number.isFinite(seats) ? seats : 0);
+  }, 0);
+}
+
 async function ensureSessionWithItems(session: Stripe.Checkout.Session) {
   if (session.line_items) return session;
 
@@ -71,37 +86,72 @@ export async function createTicketsFromSession(
   const tiers = Array.isArray(event.prices) ? event.prices : [];
   const createdTickets: CreatedTicket[] = [];
 
+  const qtyByName = new Map<string, number>();
   for (const item of items) {
     const name = item.description ?? "General";
     const qty = item.quantity ?? 1;
-    const unitAmount = item.price?.unit_amount ?? 0;
-
-    const matchedTier = tiers.find(
-      (tier) =>
-        typeof tier === "object" &&
-        tier !== null &&
-        "name" in tier &&
-        (tier as { name?: string }).name === name,
-    ) as { name?: string; price?: number } | undefined;
-
-    const resolvedPrice =
-      typeof matchedTier?.price === "number"
-        ? Math.round(matchedTier.price * 100)
-        : unitAmount;
-
-    await prisma.ticket.create({
-      data: {
-        tierName: name,
-        qty,
-        unitPrice: resolvedPrice,
-        paymentId,
-        eventId,
-        userId,
-      },
-    });
-
-    createdTickets.push({ tierName: name, qty, unitPrice: resolvedPrice });
+    qtyByName.set(name, (qtyByName.get(name) ?? 0) + qty);
   }
+
+  const updatedPrices = tiers.map((tier) => {
+    if (!tier || typeof tier !== "object") return tier;
+    const typedTier = tier as PriceTier;
+    const name = typeof typedTier.name === "string" ? typedTier.name : "";
+    const seats =
+      typeof typedTier.seats === "number" && Number.isFinite(typedTier.seats)
+        ? typedTier.seats
+        : undefined;
+    if (!name || seats === undefined) return tier;
+    const qty = qtyByName.get(name) ?? 0;
+    if (qty <= 0) return tier;
+    return { ...typedTier, seats: Math.max(0, seats - qty) };
+  });
+
+  const totalTickets = totalSeatsFromPrices(updatedPrices);
+
+  await prisma.$transaction(async (tx) => {
+    for (const item of items) {
+      const name = item.description ?? "General";
+      const qty = item.quantity ?? 1;
+      const unitAmount = item.price?.unit_amount ?? 0;
+
+      const matchedTier = tiers.find(
+        (tier) =>
+          typeof tier === "object" &&
+          tier !== null &&
+          "name" in tier &&
+          (tier as { name?: string }).name === name,
+      ) as { name?: string; price?: number } | undefined;
+
+      const resolvedPrice =
+        typeof matchedTier?.price === "number"
+          ? Math.round(matchedTier.price * 100)
+          : unitAmount;
+
+      await tx.ticket.create({
+        data: {
+          tierName: name,
+          qty,
+          unitPrice: resolvedPrice,
+          paymentId,
+          eventId,
+          userId,
+        },
+      });
+
+      createdTickets.push({ tierName: name, qty, unitPrice: resolvedPrice });
+    }
+
+    if (Array.isArray(event.prices)) {
+      await tx.event.update({
+        where: { id: event.id },
+        data: {
+          prices: updatedPrices,
+          totalTickets,
+        },
+      });
+    }
+  });
 
   if (userId && createdTickets.length > 0) {
     try {

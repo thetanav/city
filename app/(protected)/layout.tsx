@@ -12,5 +12,9 @@ export default async function Layout({
 
   if (!session) return null;
 
-  return <main className="max-w-5xl mx-auto px-4">{children}</main>;
+  return (
+    <main className="min-h-[calc(100vh-4rem)] mx-auto w-full max-w-5xl px-4 py-10">
+      {children}
+    </main>
+  );
 }
