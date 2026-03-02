@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import QRCode from "qrcode";
+import type { Treaty } from "@elysiajs/eden";
 import {
   CircleCheck,
   CalendarDays,
@@ -11,6 +12,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
@@ -22,28 +24,34 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { api } from "@/lib/eden";
 import { cn } from "@/lib/utils";
 import { signOut, useSession } from "@/lib/auth-client";
 
+type EdenEventItem = NonNullable<Treaty.Data<typeof api.events.get>>[number];
 type EventItem = {
-  id: string;
-  title: string;
-  slug: string;
+  id: EdenEventItem["id"];
+  title: EdenEventItem["title"];
+  slug: EdenEventItem["slug"];
   startDate: string;
   endDate: string;
-  location: string;
+  location: EdenEventItem["location"];
   city: string;
+  status: NonNullable<EdenEventItem["status"]>;
 };
 
-type EventApiItem = {
-  id: string;
-  title: string;
-  slug: string;
-  startDate: string;
-  endDate: string;
-  location: string;
-  city?: string | null;
-};
+function apiErrorMessage(value: unknown, fallback: string) {
+  if (
+    typeof value === "object" &&
+    value !== null &&
+    "message" in value &&
+    typeof (value as Record<string, unknown>).message === "string"
+  ) {
+    return (value as { message: string }).message;
+  }
+
+  return fallback;
+}
 
 function formatWhen(iso: string) {
   const d = new Date(iso);
@@ -78,16 +86,24 @@ export default function SettingsPage() {
 
   // Load profile data
   React.useEffect(() => {
-    fetch("/api/profiles")
-      .then((res) => res.json())
-      .then((profile) => {
-        setDisplayName(profile.name ?? "");
-        setEmail(profile.email ?? "");
-        setBio(profile.bio ?? "");
-      })
-      .catch((err) => {
+    const loadProfile = async () => {
+      try {
+        const { data, error } = await api.profiles.get();
+        if (error) {
+          throw new Error(apiErrorMessage(error.value, "Failed to load profile"));
+        }
+        if (!data) {
+          throw new Error("Failed to load profile");
+        }
+        setDisplayName(data.name ?? "");
+        setEmail(data.email ?? "");
+        setBio((data as { bio?: string | null }).bio ?? "");
+      } catch (err) {
         console.error("Failed to load profile:", err);
-      });
+      }
+    };
+
+    loadProfile();
   }, []);
 
   const [events, setEvents] = React.useState<EventItem[]>([]);
@@ -99,88 +115,87 @@ export default function SettingsPage() {
     setEventsLoading(true);
     setEventsError(null);
 
-    fetch("/api/events")
-      .then(async (res) => {
-        if (!res.ok) {
-          const body = await res.json().catch(() => null);
-          const message =
-            body && typeof body.message === "string"
-              ? body.message
-              : "Failed to load events";
-          throw new Error(message);
+    const loadEvents = async () => {
+      try {
+        const { data, error } = await api.events.get();
+        if (error) {
+          throw new Error(apiErrorMessage(error.value, "Failed to load events"));
         }
-        return res.json();
-      })
-      .then((data) => {
+        if (!data) {
+          throw new Error("Failed to load events");
+        }
         if (!active) return;
-        const items = Array.isArray(data) ? (data as EventApiItem[]) : [];
-        setEvents(items.map(normalizeEvent));
-      })
-      .catch((err: unknown) => {
+        const items = Array.isArray(data) ? (data as EdenEventItem[]) : [];
+        setEvents(items.map(normalizeEdenEvent));
+      } catch (err: unknown) {
         if (!active) return;
         const message =
           err instanceof Error ? err.message : "Failed to load events";
         setEventsError(message);
-      })
-      .finally(() => {
+      } finally {
         if (!active) return;
         setEventsLoading(false);
-      });
+      }
+    };
+
+    loadEvents();
 
     return () => {
       active = false;
     };
   }, []);
 
-  function normalizeEvent(item: EventApiItem): EventItem {
+  function normalizeEdenEvent(item: EdenEventItem): EventItem {
     return {
       id: item.id,
       title: item.title,
       slug: item.slug,
-      startDate: item.startDate,
-      endDate: item.endDate,
+      startDate: item.startDate.toISOString(),
+      endDate: item.endDate.toISOString(),
       location: item.location,
       city: item.city ?? "",
+      status: item.status ?? "DRAFT",
     };
   }
 
   async function updateEvent(id: string, patch: Partial<EventItem>) {
-    const res = await fetch(`/api/events/${id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title: patch.title,
-        startDate: patch.startDate,
-        endDate: patch.endDate,
-        location: patch.location,
-        city: patch.city,
-      }),
-    });
-
-    if (!res.ok) {
-      const body = await res.json().catch(() => null);
-      const message =
-        body && typeof body.message === "string"
-          ? body.message
-          : "Failed to update event";
-      throw new Error(message);
+    const endpoint = api.events({ id });
+    if (!("put" in endpoint)) {
+      throw new Error("Failed to update event");
     }
 
-    const updated = (await res.json()) as EventApiItem;
+    const { data, error } = await endpoint.put({
+      title: patch.title,
+      startDate: patch.startDate,
+      endDate: patch.endDate,
+      location: patch.location,
+      city: patch.city,
+      status: patch.status,
+    });
+
+    if (error) {
+      throw new Error(apiErrorMessage(error.value, "Failed to update event"));
+    }
+
+    if (!data) {
+      throw new Error("Failed to update event");
+    }
+
+    const updated = data as EdenEventItem;
     setEvents((prev) =>
-      prev.map((e) => (e.id === updated.id ? normalizeEvent(updated) : e)),
+      prev.map((e) => (e.id === updated.id ? normalizeEdenEvent(updated) : e)),
     );
   }
 
   async function deleteEvent(id: string) {
-    const res = await fetch(`/api/events/${id}`, { method: "DELETE" });
-    if (!res.ok) {
-      const body = await res.json().catch(() => null);
-      const message =
-        body && typeof body.message === "string"
-          ? body.message
-          : "Failed to delete event";
-      throw new Error(message);
+    const endpoint = api.events({ id });
+    if (!("delete" in endpoint)) {
+      throw new Error("Failed to delete event");
+    }
+
+    const { error } = await endpoint.delete();
+    if (error) {
+      throw new Error(apiErrorMessage(error.value, "Failed to delete event"));
     }
     setEvents((prev) => prev.filter((e) => e.id !== id));
   }
@@ -190,17 +205,13 @@ export default function SettingsPage() {
     setBusy(true);
     setSaved(false);
     try {
-      const res = await fetch("/api/profiles", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: displayName,
-          bio: bio || null,
-        }),
+      const { error } = await api.profiles.put({
+        name: displayName,
+        bio: bio || null,
       });
 
-      if (!res.ok) {
-        throw new Error("Failed to save profile");
+      if (error) {
+        throw new Error(apiErrorMessage(error.value, "Failed to save profile"));
       }
 
       setSaved(true);
@@ -358,6 +369,7 @@ function EventsPanel({
   const [endDate, setEndDate] = React.useState("");
   const [location, setLocation] = React.useState("");
   const [city, setCity] = React.useState("");
+  const [status, setStatus] = React.useState<EventItem["status"]>("DRAFT");
   const [saving, setSaving] = React.useState(false);
   const [deleteBusy, setDeleteBusy] = React.useState<string | null>(null);
 
@@ -368,6 +380,7 @@ function EventsPanel({
     setEndDate(toLocalInputValue(item.endDate));
     setLocation(item.location);
     setCity(item.city);
+    setStatus(item.status);
   }
 
   function resetEdit() {
@@ -377,6 +390,7 @@ function EventsPanel({
     setEndDate("");
     setLocation("");
     setCity("");
+    setStatus("DRAFT");
   }
 
   return (
@@ -446,6 +460,19 @@ function EventsPanel({
                     {event.location}
                     {event.city ? `, ${event.city}` : ""}
                   </div>
+                  <div className="mt-1">
+                    <Badge
+                      variant={
+                        event.status === "LIVE"
+                          ? "success"
+                          : event.status === "STOPPED"
+                            ? "warning"
+                            : "outline"
+                      }
+                      size="sm">
+                      {event.status}
+                    </Badge>
+                  </div>
 
                   {isEditing && (
                     <div className="mt-4 grid gap-3">
@@ -490,6 +517,24 @@ function EventsPanel({
                           />
                         </div>
                       </div>
+                      <div className="grid gap-2">
+                        <Label>Status</Label>
+                        <div className="relative">
+                          <select
+                            className={cn(
+                              "h-9 w-full rounded-lg border border-input bg-background px-3 text-sm shadow-xs",
+                              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                            )}
+                            value={status}
+                            onChange={(e) =>
+                              setStatus(e.target.value as EventItem["status"])
+                            }>
+                            <option value="DRAFT">Draft</option>
+                            <option value="LIVE">Live</option>
+                            <option value="STOPPED">Stopped</option>
+                          </select>
+                        </div>
+                      </div>
                       <div className="flex justify-end">
                         <Button
                           type="button"
@@ -504,6 +549,7 @@ function EventsPanel({
                                 endDate,
                                 location,
                                 city,
+                                status,
                               });
                               resetEdit();
                             } finally {

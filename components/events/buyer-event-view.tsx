@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import type { Treaty } from "@elysiajs/eden";
 import {
   CalendarDays,
   CornerDownRight,
@@ -20,8 +21,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { api } from "@/lib/eden";
 import { cn } from "@/lib/utils";
-import type { Event as ApiEvent } from "@/generated/prisma";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -42,6 +43,38 @@ type Tier = {
 };
 
 type SelectedTier = Tier & { qty: number };
+
+type PaymentConfirmResponse = NonNullable<
+  Exclude<Treaty.Data<typeof api.payments.confirm.post>, { message: string }>
+>;
+
+type CheckoutResponse = NonNullable<
+  Exclude<Treaty.Data<typeof api.payments.checkout.post>, { message: string }>
+>;
+
+type EdenEvent = NonNullable<
+  Exclude<Treaty.Data<ReturnType<typeof api.events.slug>["get"]>, {
+    message: string;
+  }>
+>;
+
+type ApiEventWire = Omit<EdenEvent, "startDate" | "endDate"> & {
+  startDate: string | Date;
+  endDate: string | Date;
+};
+
+function apiErrorMessage(value: unknown, fallback: string) {
+  if (
+    typeof value === "object" &&
+    value !== null &&
+    "message" in value &&
+    typeof (value as Record<string, unknown>).message === "string"
+  ) {
+    return (value as { message: string }).message;
+  }
+
+  return fallback;
+}
 
 function normalizeTiers(prices: unknown, totalTickets: number | undefined) {
   if (!Array.isArray(prices)) return [] as Tier[];
@@ -72,7 +105,7 @@ function normalizeTiers(prices: unknown, totalTickets: number | undefined) {
 }
 
 export default function BuyerEventView({ slug }: { slug: string }) {
-  const [event, setEvent] = React.useState<ApiEvent | null>(null);
+  const [event, setEvent] = React.useState<ApiEventWire | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [loadError, setLoadError] = React.useState<string | null>(null);
 
@@ -85,22 +118,21 @@ export default function BuyerEventView({ slug }: { slug: string }) {
       setLoadError(null);
 
       try {
-        const response = await fetch(
-          `/api/events/${encodeURIComponent(slug)}`,
-          { signal: controller.signal },
-        );
-
-        if (!response.ok) {
-          const body = await response.json().catch(() => null);
-          const message =
-            body && typeof body.message === "string"
-              ? body.message
-              : "Failed to load event";
-          throw new Error(message);
+        const endpoint = api.events.slug({ slug });
+        if (!("get" in endpoint)) {
+          throw new Error("Failed to load event");
         }
-
-        const data = (await response.json()) as ApiEvent;
-        if (active) setEvent(data);
+        const { data, error } = await endpoint.get({
+          fetch: { signal: controller.signal },
+        });
+        if (error) {
+          throw new Error(apiErrorMessage(error.value, "Failed to load event"));
+        }
+        if (!data) {
+          throw new Error("Failed to load event");
+        }
+        const normalized = normalizeEvent(data as ApiEventWire);
+        if (active) setEvent(normalized);
       } catch (err) {
         if (!active || controller.signal.aborted) return;
         const message =
@@ -150,24 +182,17 @@ export default function BuyerEventView({ slug }: { slug: string }) {
 
     const confirmPayment = async () => {
       try {
-        const response = await fetch("/api/payments/confirm", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sessionId }),
-        });
-
-        if (!response.ok) {
-          const body = await response.json().catch(() => null);
-          const message =
-            body && typeof body.message === "string"
-              ? body.message
-              : "We could not confirm your payment.";
-          throw new Error(message);
+        const { data, error } = await api.payments.confirm.post({ sessionId });
+        if (error) {
+          throw new Error(
+            apiErrorMessage(error.value, "We could not confirm your payment."),
+          );
+        }
+        if (!data) {
+          throw new Error("We could not confirm your payment.");
         }
 
-        const result = (await response.json()) as {
-          status?: string;
-        };
+        const result = data as PaymentConfirmResponse;
 
         if (!active) return;
 
@@ -218,25 +243,20 @@ export default function BuyerEventView({ slug }: { slug: string }) {
     if (selectedTiers.length === 0 || !event) return;
     setBusy(true);
     try {
-      const response = await fetch("/api/payments/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          eventId: event.id,
-          tiers: selectedTiers.map(({ id, name, qty }) => ({ id, name, qty })),
-        }),
+      const { data, error } = await api.payments.checkout.post({
+        eventId: event.id,
+        tiers: selectedTiers.map(({ id, name, qty }) => ({ id, name, qty })),
       });
 
-      if (!response.ok) {
-        const body = await response.json().catch(() => null);
-        const message =
-          body && typeof body.message === "string"
-            ? body.message
-            : "Failed to start checkout";
-        throw new Error(message);
+      if (error) {
+        throw new Error(apiErrorMessage(error.value, "Failed to start checkout"));
       }
 
-      const payload = (await response.json()) as { url?: string };
+      if (!data) {
+        throw new Error("Checkout session not available");
+      }
+
+      const payload = data as CheckoutResponse;
       if (!payload.url) {
         throw new Error("Checkout session not available");
       }
@@ -580,4 +600,22 @@ export default function BuyerEventView({ slug }: { slug: string }) {
       </div>
     </div>
   );
+}
+function normalizeEvent(
+  data: ApiEventWire,
+): Omit<EdenEvent, "startDate" | "endDate"> & {
+  startDate: string;
+  endDate: string;
+} {
+  return {
+    ...data,
+    startDate:
+      data.startDate instanceof Date
+        ? data.startDate.toISOString()
+        : data.startDate,
+    endDate:
+      data.endDate instanceof Date
+        ? data.endDate.toISOString()
+        : data.endDate,
+  };
 }

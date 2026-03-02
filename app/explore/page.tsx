@@ -1,25 +1,49 @@
 "use client";
 
 import * as React from "react";
+import type { Treaty } from "@elysiajs/eden";
 import { Search, MapPin, Calendar, X, SlidersHorizontal } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { api } from "@/lib/eden";
 import { cn } from "@/lib/utils";
 
+type EdenEvent = NonNullable<Treaty.Data<typeof api.events.get>>[number];
 type Event = {
-  id: string;
-  title: string;
-  description: string;
-  slug: string;
+  id: EdenEvent["id"];
+  title: EdenEvent["title"];
+  description: EdenEvent["description"];
+  slug: EdenEvent["slug"];
   startDate: string;
-  location: string;
-  city: string | null;
-  posterImage: string | null;
-  genre: string[];
+  location: EdenEvent["location"];
+  city: EdenEvent["city"];
+  posterImage: EdenEvent["posterImage"];
+  genre: EdenEvent["genre"];
+  status?: EdenEvent["status"];
 };
+
+function normalizeEdenEvent(item: EdenEvent): Event {
+  return {
+    ...item,
+    startDate: item.startDate.toISOString(),
+  };
+}
+
+function apiErrorMessage(value: unknown, fallback: string) {
+  if (
+    typeof value === "object" &&
+    value !== null &&
+    "message" in value &&
+    typeof (value as Record<string, unknown>).message === "string"
+  ) {
+    return (value as { message: string }).message;
+  }
+
+  return fallback;
+}
 
 export default function ExplorePage() {
   const [events, setEvents] = React.useState<Event[]>([]);
@@ -29,16 +53,25 @@ export default function ExplorePage() {
   const [showFilters, setShowFilters] = React.useState(false);
 
   React.useEffect(() => {
-    fetch("/api/events")
-      .then((res) => res.json())
-      .then((data) => {
-        setEvents(data);
-        setLoading(false);
-      })
-      .catch((err) => {
+    const loadEvents = async () => {
+      try {
+        const { data, error } = await api.events.get();
+        if (error) {
+          throw new Error(apiErrorMessage(error.value, "Failed to fetch events"));
+        }
+        if (!data) {
+          throw new Error("Failed to fetch events");
+        }
+        const items = Array.isArray(data) ? (data as EdenEvent[]) : [];
+        setEvents(items.map(normalizeEdenEvent));
+      } catch (err) {
         console.error("Failed to fetch events:", err);
+      } finally {
         setLoading(false);
-      });
+      }
+    };
+
+    loadEvents();
   }, []);
 
   const genres = React.useMemo(() => {
@@ -48,6 +81,7 @@ export default function ExplorePage() {
 
   const filteredEvents = React.useMemo(() => {
     return events.filter((e) => {
+      if (e.status && e.status !== "LIVE") return false;
       const matchesSearch =
         e.title.toLowerCase().includes(search.toLowerCase()) ||
         e.location.toLowerCase().includes(search.toLowerCase()) ||

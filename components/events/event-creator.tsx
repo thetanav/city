@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { Image as ImageIcon, Link2, Plus, Trash2 } from "lucide-react";
+import type { Treaty } from "@elysiajs/eden";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -15,6 +16,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { api } from "@/lib/eden";
 import { cn } from "@/lib/utils";
 
 type Tier = {
@@ -25,10 +27,24 @@ type Tier = {
   note: string;
 };
 
-type CreateEventResponse = {
-  id: string;
-  slug: string;
-};
+type EdenEventItem = NonNullable<Treaty.Data<typeof api.events.get>>[number];
+type EventStatus = NonNullable<EdenEventItem["status"]>;
+type CreateEventResponse = NonNullable<
+  Exclude<Treaty.Data<typeof api.events.post>, { message: string }>
+>;
+
+function apiErrorMessage(value: unknown, fallback: string) {
+  if (
+    typeof value === "object" &&
+    value !== null &&
+    "message" in value &&
+    typeof (value as Record<string, unknown>).message === "string"
+  ) {
+    return (value as { message: string }).message;
+  }
+
+  return fallback;
+}
 
 function slugify(raw: string) {
   return raw
@@ -62,6 +78,7 @@ export default function EventCreator() {
   const [slugTouched, setSlugTouched] = React.useState(false);
 
   const [coverUrl, setCoverUrl] = React.useState("");
+  const [status, setStatus] = React.useState<EventStatus>("DRAFT");
 
   const [tiers, setTiers] = React.useState<Tier[]>([
     {
@@ -123,36 +140,33 @@ export default function EventCreator() {
       note: tier.note || undefined,
     }));
 
-    const res = await fetch("/api/events", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title,
-        tagline,
-        description: normalizedDescription,
-        slug,
-        startDate: startAt,
-        endDate: hasEndDate ? endAt : null,
-        location,
-        city: "",
-        contactEmail: contactEmail.trim() || null,
-        posterImage: coverUrl.trim() || null,
-        prices,
-        totalTickets: totalSeats,
-        genre: [],
-      }),
+    const { data, error } = await api.events.post({
+      title,
+      tagline,
+      description: normalizedDescription,
+      slug,
+      startDate: startAt,
+      endDate: hasEndDate && endAt ? endAt : undefined,
+      location,
+      city: "",
+      creatorId: "placeholder-user-id",
+      contactEmail: contactEmail.trim() || undefined,
+      posterImage: coverUrl.trim() || undefined,
+      status,
+      prices,
+      totalTickets: totalSeats,
+      genre: [],
     });
 
-    if (!res.ok) {
-      const body = await res.json().catch(() => null);
-      const message =
-        body && typeof body.message === "string"
-          ? body.message
-          : "Failed to create event";
-      throw new Error(message);
+    if (error) {
+      throw new Error(apiErrorMessage(error.value, "Failed to create event"));
     }
 
-    return (await res.json()) as CreateEventResponse;
+    if (!data) {
+      throw new Error("Failed to create event");
+    }
+
+    return data as CreateEventResponse;
   }
 
   async function onSubmit(e: React.FormEvent) {
@@ -193,6 +207,25 @@ export default function EventCreator() {
               <CardDescription>The basics people see first.</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="status">Status</Label>
+                <div className="relative">
+                  <select
+                    id="status"
+                    className={cn(
+                      "h-9 w-full rounded-lg border border-input bg-background px-3 text-sm shadow-xs",
+                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    )}
+                    value={status}
+                    onChange={(e) =>
+                      setStatus(e.target.value as EventStatus)
+                    }>
+                    <option value="DRAFT">Draft</option>
+                    <option value="LIVE">Live</option>
+                    <option value="STOPPED">Stopped</option>
+                  </select>
+                </div>
+              </div>
               <div className="grid gap-2">
                 <Label htmlFor="title">Title</Label>
                 <Input
@@ -301,7 +334,7 @@ export default function EventCreator() {
             <CardContent className="grid gap-2">
               <Label htmlFor="slug">Slug</Label>
               <div className="relative">
-                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 select-none text-xs text-muted-foreground">
+                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 select-none text-xs text-muted-foreground z-10">
                   /e/
                 </span>
                 <Input
@@ -312,7 +345,7 @@ export default function EventCreator() {
                     setSlug(slugify(e.target.value));
                   }}
                   onBlur={() => setSlugTouched(true)}
-                  className={cn("pl-10", !slugOk && "border-destructive")}
+                  className={cn("pl-7", !slugOk && "border-destructive")}
                   placeholder="night-market-sessions"
                   autoComplete="off"
                 />

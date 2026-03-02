@@ -27,12 +27,15 @@ const eventCreateSchema = t.Object({
   city: t.Optional(t.String()),
   contactEmail: t.Optional(t.String({ format: "email" })),
   posterImage: t.Optional(t.String()),
-  creatorId: t.Optional(t.String()),
-  prices: t.Optional(t.Array(t.Object({
-    name: t.String(),
-    price: t.Number(),
-    seats: t.Optional(t.Number()),
-  }))),
+  creatorId: t.String(),
+  status: t.Optional(t.Union([t.Literal("DRAFT"), t.Literal("LIVE"), t.Literal("STOPPED")])),
+  prices: t.Array(
+    t.Object({
+      name: t.String(),
+      price: t.Number(),
+      seats: t.Optional(t.Number()),
+    }),
+  ),
   totalTickets: t.Optional(t.Number()),
   genre: t.Optional(t.Array(t.String())),
 });
@@ -46,7 +49,7 @@ export const eventsRoutes = new Elysia({ prefix: "/events" })
     }),
   )
   .get(
-    "/:slug",
+    "/slug/:slug",
     async ({ params, set }) => {
       const event = await prisma.event.findUnique({
         where: { slug: params.slug },
@@ -97,6 +100,7 @@ export const eventsRoutes = new Elysia({ prefix: "/events" })
             contactEmail: body.contactEmail ?? null,
             posterImage: body.posterImage ?? null,
             creatorId: body.creatorId ?? null,
+            status: body.status ?? "DRAFT",
             prices: body.prices ?? undefined,
             totalTickets,
             genre: body.genre ?? [],

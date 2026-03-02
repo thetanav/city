@@ -8,6 +8,7 @@ const ticketCreateSchema = t.Object({
   unitPrice: t.Number(),
   paymentId: t.Optional(t.String()),
   userId: t.Optional(t.String()),
+  valid: t.Optional(t.Boolean()),
 });
 
 const ticketUpdateSchema = t.Partial(ticketCreateSchema);
@@ -62,6 +63,7 @@ export const ticketsRoutes = new Elysia({ prefix: "/tickets" })
             unitPrice: body.unitPrice,
             paymentId: body.paymentId ?? null,
             userId: body.userId ?? null,
+            valid: body.valid ?? true,
           },
           include: { event: true },
         });

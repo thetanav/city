@@ -27,6 +27,7 @@ type TicketData = {
   tierName: string;
   qty: number;
   createdAt: string;
+  valid?: boolean | null;
   event: {
     id: string;
     title: string;
@@ -170,6 +171,11 @@ export default function HomePage({
                     <p className="text-lg font-semibold">
                       {activeTicket.event.title}
                     </p>
+                    {activeTicket.valid === false && (
+                      <p className="text-xs font-semibold text-destructive">
+                        Ticket invalidated by organizer
+                      </p>
+                    )}
                     <p className="text-sm text-muted-foreground">
                       {new Intl.DateTimeFormat("en-US", {
                         weekday: "short",
@@ -254,6 +260,11 @@ function TicketCard({
               <p className="text-xs text-muted-foreground">{ticket.tierName}</p>
               <h3 className="font-semibold truncate">{ticket.event.title}</h3>
             </div>
+            {ticket.valid === false && (
+              <p className="text-xs font-semibold text-destructive">
+                Invalidated by organizer
+              </p>
+            )}
             <div className="space-y-1 text-sm text-muted-foreground">
               <div className="flex items-center gap-1.5">
                 <Calendar className="size-3.5" />
