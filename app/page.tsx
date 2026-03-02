@@ -39,7 +39,7 @@ export default async function Page() {
   ] as const;
 
   return (
-    <div className="relative overflow-hidden">
+    <div className="relative">
       <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(60%_60%_at_50%_0%,rgba(14,165,233,0.16),transparent_65%)]" />
       <div className="pointer-events-none absolute inset-y-0 right-0 -z-10 w-1/2 bg-[radial-gradient(50%_60%_at_50%_50%,rgba(236,72,153,0.12),transparent_70%)]" />
 
@@ -81,9 +81,7 @@ export default async function Page() {
               <Card key={stat.label} className="bg-background/70">
                 <CardContent className="py-6">
                   <p className="text-2xl font-semibold">{stat.value}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {stat.label}
-                  </p>
+                  <p className="text-sm text-muted-foreground">{stat.label}</p>
                 </CardContent>
               </Card>
             ))}

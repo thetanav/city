@@ -13,9 +13,7 @@ export default async function DashboardPage() {
     headers: await headers(),
   });
 
-  if (!session) {
-    redirect("/auth");
-  }
+  if (!session) return null;
 
   const events = await prisma.event.findMany({
     where: {
