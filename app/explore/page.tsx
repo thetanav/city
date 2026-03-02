@@ -64,7 +64,9 @@ export default function ExplorePage() {
       try {
         const { data, error } = await api.events.get();
         if (error) {
-          throw new Error(apiErrorMessage(error.value, "Failed to fetch events"));
+          throw new Error(
+            apiErrorMessage(error.value, "Failed to fetch events"),
+          );
         }
         if (!data) {
           throw new Error("Failed to fetch events");
@@ -276,7 +278,7 @@ function EventCard({ event }: { event: Event }) {
 
         <CardContent className="pt-4 space-y-1.5">
           <div className="flex items-center gap-2">
-            {event.genre?.slice(0, 2).map((g) => (
+            {event.genre?.slice(0, 2).map((g: any) => (
               <Badge key={g} variant="secondary" className="text-xs">
                 {g}
               </Badge>
