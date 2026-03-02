@@ -2,7 +2,14 @@
 
 import * as React from "react";
 import type { Treaty } from "@elysiajs/eden";
-import { Search, MapPin, Calendar, X, SlidersHorizontal } from "lucide-react";
+import {
+  Search,
+  MapPin,
+  Calendar,
+  X,
+  SlidersHorizontal,
+  Sparkles,
+} from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -96,14 +103,28 @@ export default function ExplorePage() {
   return (
     <div className="min-h-screen">
       {/* Search Header */}
-      <div className="border-b">
-        <div className="container max-w-6xl mx-auto px-4 py-6 space-y-4">
+      <div className="border-b bg-gradient-to-b from-muted/40 via-background to-background">
+        <div className="container max-w-6xl mx-auto px-4 py-10 space-y-6">
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground flex items-center gap-2">
+              <Sparkles className="size-4 text-primary" />
+              Curated experiences
+            </p>
+            <h1 className="text-3xl md:text-4xl font-semibold tracking-tight">
+              Find your next night out.
+            </h1>
+            <p className="text-muted-foreground max-w-2xl">
+              Browse live events, spotlighted creators, and local moments worth
+              showing up for.
+            </p>
+          </div>
+
           <div className="flex flex-col sm:flex-row gap-2 sm:items-center justify-between">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
               <Input
-                placeholder="Search events..."
-                className="pl-6"
+                placeholder="Search events, venues, or vibes..."
+                className="pl-9"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
@@ -127,6 +148,23 @@ export default function ExplorePage() {
                 </Badge>
               )}
             </Button>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+            <span>
+              {loading
+                ? "Loading events..."
+                : `${filteredEvents.length} events live`}
+            </span>
+            {selectedGenre && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2"
+                onClick={() => setSelectedGenre(null)}>
+                Clear genre
+              </Button>
+            )}
           </div>
 
           {showFilters && genres.length > 0 && (
@@ -164,17 +202,26 @@ export default function ExplorePage() {
             ))}
           </div>
         ) : filteredEvents.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredEvents.map((event) => (
-              <EventCard key={event.id} event={event} />
-            ))}
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold">Events</h2>
+              <span className="text-sm text-muted-foreground">
+                Showing {filteredEvents.length} results
+              </span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredEvents.map((event) => (
+                <EventCard key={event.id} event={event} />
+              ))}
+            </div>
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center py-20 text-center space-y-3">
             <Search className="size-10 text-muted-foreground" />
             <h2 className="text-lg font-semibold">No events found</h2>
             <p className="text-sm text-muted-foreground max-w-xs">
-              Try adjusting your search or filters.
+              Try another search term or remove the filters to see everything
+              live right now.
             </p>
             <Button
               variant="outline"
@@ -201,21 +248,30 @@ function EventCard({ event }: { event: Event }) {
 
   return (
     <Link href={`/e/${event.slug}`} className="group block">
-      <Card className="overflow-hidden transition-colors hover:bg-muted/50">
+      <Card className="overflow-hidden transition hover:-translate-y-1 hover:bg-muted/50 hover:shadow-lg">
         {/* Image */}
-        <div className="aspect-[3/2] overflow-hidden bg-muted">
+        <div className="relative aspect-[3/2] overflow-hidden bg-muted">
+          <div className="absolute left-3 top-3 z-10 flex items-center gap-2">
+            <Badge variant="secondary" className="bg-background/80">
+              {dateStr}
+            </Badge>
+            {event.status === "LIVE" && (
+              <Badge className="bg-emerald-500 text-white">Live</Badge>
+            )}
+          </div>
           {event.posterImage ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={event.posterImage}
               alt={event.title}
-              className="w-full h-full object-cover"
+              className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center">
               <Calendar className="size-8 text-muted-foreground" />
             </div>
           )}
+          <div className="absolute inset-0 bg-gradient-to-t from-background/70 via-transparent to-transparent opacity-0 transition group-hover:opacity-100" />
         </div>
 
         <CardContent className="pt-4 space-y-1.5">

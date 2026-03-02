@@ -44,7 +44,7 @@ City is a modern, high-performance event management and ticketing platform built
    ```
 
 3. Configure environment variables:
-   Create a `.env` file in the root directory and add the following:
+   Create a `.env` file in the root directory (or copy `.env.example`) and add:
    ```env
    DATABASE_URL="postgresql://..."
    NEXT_PUBLIC_APP_URL="http://localhost:3000"
@@ -83,6 +83,16 @@ City is a modern, high-performance event management and ticketing platform built
 - `bun run lint`: Runs ESLint for code quality checks
 - `bun run generate`: Generates the Prisma client
 - `bun run migrate`: Applies database migrations
+
+## 🚀 Deploy to Vercel
+
+1. Import the repo in Vercel.
+2. Confirm the build settings (or rely on `vercel.json`):
+   - Install Command: `bun install`
+   - Build Command: `bun run build`
+   - Output: `.next`
+3. Add the required environment variables from `.env.example`.
+4. Deploy.
 
 ## 🛡️ License
 
