@@ -47,14 +47,15 @@ const eventUpdateSchema = t.Partial(eventCreateSchema);
 export const eventsRoutes = new Elysia({ prefix: "/events" })
   .get(
     "/",
-    async ({ params }) => {
-      prisma.event.findMany({
+    async ({ query }) => {
+      console.log("inside the get /", query.limit);
+      const data = await prisma.event.findMany({
         orderBy: { startDate: "asc" },
-        take: params.take,
-        skip: params.skip,
+        take: query.limit,
+        skip: query.offset,
         where: {
-          title: params.query
-            ? { contains: params.query, mode: "insensitive" }
+          title: query.query
+            ? { contains: query.query, mode: "insensitive" }
             : undefined,
           status: "LIVE",
         },
@@ -67,12 +68,20 @@ export const eventsRoutes = new Elysia({ prefix: "/events" })
           genre: true,
         },
       });
+      return {
+        totalPages: Math.ceil((await prisma.event.count()) / query.limit),
+        limit: query.limit,
+        pageOffset: query.offset,
+        nextPage: query.offset + query.limit < (await prisma.event.count()),
+        previousPage: query.offset > 0,
+        data,
+      };
     },
     {
-      params: t.Object({
-        skip: t.Optional(t.Number()).default(0),
-        take: t.Optional(t.Number()).default(10),
-        query: t.Optional(t.String()),
+      query: t.Object({
+        offset: t.Number(),
+        limit: t.Number(),
+        query: t.String(),
       }),
     },
   )
@@ -170,18 +179,19 @@ export const eventsRoutes = new Elysia({ prefix: "/events" })
     },
   )
   .get(
-    "/slug",
+    "/slug/:slug",
     async ({ params }) => {
       const event = await prisma.event.findUnique({
         where: { slug: params.slug },
-        select: { id: true },
       });
 
-      if (event) {
-        return { exists: false };
+      if (!event) {
+        return { ok: false, data: null };
       }
-
-      return { exists: true };
+      return {
+        ok: true,
+        data: event,
+      };
     },
     {
       params: t.Object({ slug: t.String() }),

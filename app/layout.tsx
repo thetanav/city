@@ -4,6 +4,7 @@ import { Navbar } from "@/components/navbar";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Providers } from "@/components/providers";
 import NextTopLoader from "nextjs-toploader";
+import { AnchoredToastProvider, ToastProvider } from "@/components/ui/toast";
 
 export const metadata: Metadata = {
   title: "City",
@@ -40,9 +41,13 @@ export default function RootLayout({
             defaultTheme="system"
             enableSystem
             disableTransitionOnChange>
-            <NextTopLoader />
-            <Navbar />
-            <div className="min-h-screen max-w-5xl mx-auto">{children}</div>
+            <ToastProvider>
+              <AnchoredToastProvider>
+                <NextTopLoader showSpinner={false} />
+                <Navbar />
+                <div className="min-h-screen max-w-5xl mx-auto">{children}</div>
+              </AnchoredToastProvider>
+            </ToastProvider>
           </ThemeProvider>
         </Providers>
       </body>

@@ -93,8 +93,7 @@ export default async function EventDashboardPage({ params }: PageProps) {
       <section className="space-y-2">
         <Link
           href="/dashboard"
-          className="text-sm text-muted-foreground hover:text-foreground"
-        >
+          className="text-sm text-muted-foreground hover:text-foreground">
           Back to dashboard
         </Link>
         <div className="space-y-1">
@@ -201,8 +200,7 @@ export default async function EventDashboardPage({ params }: PageProps) {
                           <td className="py-3 pr-4">
                             <Badge
                               variant={ticket.valid ? "success" : "destructive"}
-                              size="sm"
-                            >
+                              size="sm">
                               {ticket.valid ? "Valid" : "Invalid"}
                             </Badge>
                           </td>

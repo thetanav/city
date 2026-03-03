@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { ModeToggle } from "./mode-toggle";
 import Logo from "./logo";
+import DynamicImg from "./dynimg";
 
 export const Navbar = async () => {
   const session = await auth.api.getSession({
@@ -42,12 +43,10 @@ export const Navbar = async () => {
       <div className="flex items-center gap-2">
         <ModeToggle />
         <Link href="/settings">
-          <button className="h-7 w-7 flex items-center justify-center rounded-full overflow-hidden cursor-pointer">
-            <img
-              src={session?.user.image!}
-              alt={session?.user.name || "User"}
-            />
-          </button>
+          <DynamicImg
+            src={session?.user.image!}
+            className="h-7 w-7 rounded-full"
+          />
         </Link>
       </div>
     </nav>

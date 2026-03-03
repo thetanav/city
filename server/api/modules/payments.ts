@@ -2,6 +2,7 @@ import { Elysia, t } from "elysia";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { stripeClient } from "@/lib/stripe";
+import { createTicketsFromSession } from "@/lib/payments";
 import type Stripe from "stripe";
 
 const checkoutSchema = t.Object({
@@ -227,25 +228,26 @@ export const paymentsRoutes = new Elysia({ prefix: "/payments" })
           return { message: "Payment not completed" };
         }
 
+        const ticketResult = await createTicketsFromSession(session);
+        if (
+          ticketResult.status !== "created" &&
+          ticketResult.status !== "skipped"
+        ) {
+          set.status = 500;
+          return { message: "Payment verified but ticket issuance failed" };
+        }
+
         const paymentId = session.payment_intent?.toString() ?? null;
         const eventId = session.metadata?.eventId ?? null;
         const userId = session.metadata?.userId ?? null;
 
-        let processed = false;
-        if (paymentId && eventId) {
-          const existing = await prisma.ticket.findFirst({
-            where: { paymentId, eventId },
-            select: { id: true },
-          });
-          processed = Boolean(existing);
-        }
-
         return {
           ok: true,
-          status: processed ? "processed" : "pending",
+          status: "processed",
           paymentId,
           eventId,
           userId,
+          issuedTickets: ticketResult.createdTickets.length,
         };
       } catch (error) {
         console.error("[payments] Failed to confirm payment:", error);

@@ -1,7 +1,6 @@
 "use client";
 
-import * as React from "react";
-import type { Treaty } from "@elysiajs/eden";
+import { useEffect, useState, use, useMemo } from "react";
 import {
   CalendarDays,
   CornerDownRight,
@@ -26,14 +25,24 @@ import { api } from "@/lib/eden";
 import { cn } from "@/lib/utils";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { notFound } from "next/navigation";
+import Loading from "@/components/loading";
+import { toastManager } from "@/components/ui/toast";
 
-function formatMoney(n: number) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: n % 1 === 0 ? 0 : 2,
-  }).format(n);
-}
+type EventData = {
+  id: string;
+  slug: string;
+  title: string;
+  tagline: string;
+  description: string;
+  startDate: string;
+  endDate: string | null;
+  location: string;
+  contactEmail: string | null;
+  posterImage: string | null;
+  totalTickets: number;
+  prices: unknown;
+};
 
 type Tier = {
   id: string;
@@ -45,166 +54,167 @@ type Tier = {
 
 type SelectedTier = Tier & { qty: number };
 
-type PaymentConfirmResponse = NonNullable<
-  Exclude<Treaty.Data<typeof api.payments.confirm.post>, { message: string }>
->;
-
-type CheckoutResponse = NonNullable<
-  Exclude<Treaty.Data<typeof api.payments.checkout.post>, { message: string }>
->;
-
-type EdenEvent = NonNullable<
-  Exclude<
-    Treaty.Data<ReturnType<typeof api.events.slug>["get"]>,
-    {
-      message: string;
-    }
-  >
->;
-
-type ApiEventWire = Omit<EdenEvent, "startDate" | "endDate"> & {
-  startDate: string | Date;
-  endDate: string | Date;
-};
-
-function apiErrorMessage(value: unknown, fallback: string) {
-  if (
-    typeof value === "object" &&
-    value !== null &&
-    "message" in value &&
-    typeof (value as Record<string, unknown>).message === "string"
-  ) {
-    return (value as { message: string }).message;
-  }
-
-  return fallback;
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }
 
-function normalizeTiers(prices: unknown, totalTickets: number | undefined) {
+function formatMoney(n: number) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: n % 1 === 0 ? 0 : 2,
+  }).format(n);
+}
+
+function normalizeTiers(prices: any, totalTickets: number) {
   if (!Array.isArray(prices)) return [] as Tier[];
 
   return prices.map((item, index) => {
-    const fallbackRemaining = totalTickets ?? 0;
-
-    if (typeof item !== "object" || item === null) {
+    if (!isRecord(item)) {
       return {
         id: `tier-${index + 1}`,
         name: `Tier ${index + 1}`,
         price: 0,
-        seats: fallbackRemaining,
-        note: "Invalid tier data",
-      };
+        seats: totalTickets,
+      } satisfies Tier;
     }
 
-    const raw = item as Tier;
+    const name =
+      typeof item.name === "string" && item.name.trim().length > 0
+        ? item.name
+        : `Tier ${index + 1}`;
+
+    const price =
+      typeof item.price === "number" && Number.isFinite(item.price)
+        ? item.price
+        : 0;
+
+    const seats =
+      typeof item.seats === "number" && Number.isFinite(item.seats)
+        ? Math.max(0, item.seats)
+        : totalTickets;
 
     return {
-      id: `tier-${index + 1}`,
-      name: raw.name,
-      price: raw.price,
-      seats: raw.seats,
-      note: raw.note,
+      id:
+        typeof item.id === "string" && item.id.trim().length > 0
+          ? item.id
+          : `tier-${index + 1}`,
+      name,
+      price,
+      seats,
+      note: typeof item.note === "string" ? item.note : undefined,
     } satisfies Tier;
   });
 }
 
-export default async function Page({ params }: { params: { slug: string } }) {
-  const { slug } = await params;
+function extractCheckoutUrl(payload: unknown) {
+  if (isRecord(payload) && typeof payload.url === "string") {
+    return payload.url;
+  }
+  return null;
+}
 
-  const eventQuery = useQuery({
+function extractConfirmStatus(payload: unknown) {
+  if (!isRecord(payload)) return null;
+  return payload.status === "processed" || payload.status === "pending"
+    ? payload.status
+    : null;
+}
+
+function apiErrorMessage(value: unknown, fallback: string): string {
+  if (isRecord(value) && typeof value.message === "string")
+    return value.message;
+  return fallback;
+}
+
+export default function Page({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}) {
+  const { slug } = use(params);
+
+  const {
+    data: event,
+    isLoading,
+    isSuccess,
+  } = useQuery({
     queryKey: ["event", slug],
     queryFn: async () => {
-      const endpoint = api.events.slug({ slug });
-      if (!("get" in endpoint)) {
-        throw new Error("Failed to load event");
-      }
-      const { data, error } = await endpoint.get();
-      if (error) {
-        throw new Error(apiErrorMessage(error.value, "Failed to load event"));
-      }
-      if (!data) {
-        throw new Error("Failed to load event");
-      }
-      return normalizeEvent(data as ApiEventWire);
+      return (await api.events.slug({ slug }).get()).data?.data;
     },
   });
 
-  const event = eventQuery.data ?? null;
-  const loading = eventQuery.isLoading;
-  const loadError = eventQuery.isError
-    ? eventQuery.error instanceof Error
-      ? eventQuery.error.message
-      : "Failed to load event"
-    : null;
-
-  const tiers = React.useMemo<Tier[]>(() => {
+  const tiers = useMemo<Tier[]>(() => {
     if (!event) return [];
     return normalizeTiers(event.prices, event.totalTickets);
   }, [event]);
 
-  const [selections, setSelections] = React.useState<Record<string, number>>(
-    {},
-  );
-  const [paymentNotice, setPaymentNotice] = React.useState<
+  const [selections, setSelections] = useState<Record<string, number>>({});
+  const [paymentNotice, setPaymentNotice] = useState<
     | { status: "success"; message: string }
     | { status: "error"; message: string }
     | null
   >(null);
 
-  React.useEffect(() => {
+  useEffect(() => {
     setSelections({});
     setPaymentNotice(null);
   }, [event?.slug]);
 
+  const selectedTiers = useMemo<SelectedTier[]>(() => {
+    return tiers
+      .filter((tier) => (selections[tier.id] ?? 0) > 0)
+      .map((tier) => ({ ...tier, qty: selections[tier.id] }));
+  }, [tiers, selections]);
+
   const confirmPaymentMutation = useMutation({
     mutationFn: async (sessionId: string) => {
       const { data, error } = await api.payments.confirm.post({ sessionId });
+
       if (error) {
-        throw new Error(
-          apiErrorMessage(error.value, "We could not confirm your payment."),
-        );
-      }
-      if (!data) {
         throw new Error("We could not confirm your payment.");
       }
-      return data as PaymentConfirmResponse;
+
+      const status = extractConfirmStatus(data);
+      if (!status) {
+        throw new Error("We could not confirm your payment.");
+      }
+
+      return status;
     },
   });
 
   const checkoutMutation = useMutation({
     mutationFn: async () => {
-      if (selectedTiers.length === 0 || !event) {
+      if (!event || selectedTiers.length === 0) {
         throw new Error("Select at least one ticket.");
       }
+
       const { data, error } = await api.payments.checkout.post({
         eventId: event.id,
         tiers: selectedTiers.map(({ id, name, qty }) => ({ id, name, qty })),
       });
 
       if (error) {
-        throw new Error(
-          apiErrorMessage(error.value, "Failed to start checkout"),
-        );
+        throw new Error("Failed to start checkout.");
       }
 
-      if (!data) {
-        throw new Error("Checkout session not available");
+      const checkoutUrl = extractCheckoutUrl(data);
+      if (!checkoutUrl) {
+        throw new Error("Checkout session not available.");
       }
 
-      const payload = data as CheckoutResponse;
-      if (!payload.url) {
-        throw new Error("Checkout session not available");
-      }
-
-      return payload.url;
+      return checkoutUrl;
     },
   });
 
-  React.useEffect(() => {
-    if (!eventQuery.isSuccess) return;
-    const params = new URLSearchParams(window.location.search);
-    const payment = params.get("payment");
-    const sessionId = params.get("session_id");
+  useEffect(() => {
+    if (!isSuccess) return;
+
+    const search = new URLSearchParams(window.location.search);
+    const payment = search.get("payment");
+    const sessionId = search.get("session_id");
 
     if (payment !== "success" || !sessionId) return;
 
@@ -212,9 +222,10 @@ export default async function Page({ params }: { params: { slug: string } }) {
 
     const confirmPayment = async () => {
       try {
-        const result = await confirmPaymentMutation.mutateAsync(sessionId);
+        const status = await confirmPaymentMutation.mutateAsync(sessionId);
         if (!active) return;
-        if (result.status === "processed") {
+
+        if (status === "processed") {
           setPaymentNotice({
             status: "success",
             message:
@@ -229,10 +240,12 @@ export default async function Page({ params }: { params: { slug: string } }) {
         }
       } catch (err) {
         if (!active) return;
+
         const message =
           err instanceof Error
             ? err.message
             : "We could not confirm your payment.";
+
         setPaymentNotice({ status: "error", message });
       }
     };
@@ -242,13 +255,7 @@ export default async function Page({ params }: { params: { slug: string } }) {
     return () => {
       active = false;
     };
-  }, [confirmPaymentMutation, eventQuery.isSuccess]);
-
-  const selectedTiers = React.useMemo<SelectedTier[]>(() => {
-    return tiers
-      .filter((tier) => selections[tier.id] > 0)
-      .map((tier) => ({ ...tier, qty: selections[tier.id] }));
-  }, [tiers, selections]);
+  }, [confirmPaymentMutation, isSuccess]);
 
   const subtotal = selectedTiers.reduce(
     (acc, tier) => acc + tier.price * tier.qty,
@@ -263,39 +270,14 @@ export default async function Page({ params }: { params: { slug: string } }) {
       window.location.href = checkoutUrl;
     } catch (err) {
       console.error(err);
-      alert("Failed to start checkout. Please try again.");
+      toastManager.add({
+        data: "Failed to start checkout. Please try again.",
+      });
     }
   }
 
-  if (loading) {
-    return (
-      <div>
-        <div className="rounded-lg border p-8 text-sm text-muted-foreground">
-          Loading event...
-        </div>
-      </div>
-    );
-  }
-
-  if (loadError) {
-    return (
-      <div>
-        <div className="rounded-lg border p-8 text-sm text-muted-foreground">
-          {loadError}
-        </div>
-      </div>
-    );
-  }
-
-  if (!event) {
-    return (
-      <div>
-        <div className="rounded-lg border p-8 text-sm text-muted-foreground">
-          Event not found.
-        </div>
-      </div>
-    );
-  }
+  if (isLoading) return <Loading />;
+  if (!event) return notFound();
 
   const start = new Date(event.startDate);
   const when = new Intl.DateTimeFormat("en-US", {
@@ -306,28 +288,24 @@ export default async function Page({ params }: { params: { slug: string } }) {
     minute: "2-digit",
   }).format(start);
 
-  let end = null;
-  let until = null;
-  if (event.endDate) {
-    end = new Date(event.endDate);
-    until = new Intl.DateTimeFormat("en-US", {
-      month: "short",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-    }).format(end);
-  }
+  const until =
+    event.endDate === null
+      ? null
+      : new Intl.DateTimeFormat("en-US", {
+          month: "short",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+        }).format(new Date(event.endDate));
 
   return (
     <div>
-      {/* Cover Image */}
       {event.posterImage && (
-        <div className="rounded-lg overflow-hidden mb-6">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
+        <div className="mb-6 overflow-hidden rounded-lg">
           <img
             src={event.posterImage}
             alt="Event cover"
-            className="h-56 w-full object-cover sm:h-72"
+            className="w-full object-cover aspect-16/7"
           />
         </div>
       )}
@@ -336,7 +314,7 @@ export default async function Page({ params }: { params: { slug: string } }) {
         <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
           {event.title}
         </h1>
-        <p className="text-muted-foreground mt-1">{event.tagline}</p>
+        <p className="mt-1 text-muted-foreground">{event.tagline}</p>
       </div>
 
       {paymentNotice && (
@@ -353,7 +331,6 @@ export default async function Page({ params }: { params: { slug: string } }) {
 
       <div className="grid gap-6 lg:grid-cols-[1.25fr_.85fr]">
         <div className="grid gap-6">
-          {/* About */}
           <Card>
             <CardHeader>
               <CardTitle>About</CardTitle>
@@ -369,8 +346,8 @@ export default async function Page({ params }: { params: { slug: string } }) {
                     <p className="text-xs text-muted-foreground">When</p>
                     <p className="text-sm font-medium">{when}</p>
                     {until && (
-                      <p className="text-sm font-medium inline-flex">
-                        <CornerDownRight className="opacity-60 size-4 mr-1" />
+                      <p className="inline-flex text-sm font-medium">
+                        <CornerDownRight className="mr-1 size-4 opacity-60" />
                         {until}
                       </p>
                     )}
@@ -383,17 +360,19 @@ export default async function Page({ params }: { params: { slug: string } }) {
                     <p className="text-sm font-medium">{event.location}</p>
                   </div>
                 </div>
-                <div className="flex items-start gap-3">
-                  <Mail className="mt-0.5 size-4 text-muted-foreground" />
-                  <div>
-                    <p className="text-xs text-muted-foreground">Contact</p>
-                    <a
-                      className="text-sm font-medium"
-                      href={`mailto:${event.contactEmail}`}>
-                      {event.contactEmail}
-                    </a>
+                {event.contactEmail && (
+                  <div className="flex items-start gap-3">
+                    <Mail className="mt-0.5 size-4 text-muted-foreground" />
+                    <div>
+                      <p className="text-xs text-muted-foreground">Contact</p>
+                      <a
+                        className="text-sm font-medium"
+                        href={`mailto:${event.contactEmail}`}>
+                        {event.contactEmail}
+                      </a>
+                    </div>
                   </div>
-                </div>
+                )}
                 <div className="flex items-start gap-3">
                   <Ticket className="mt-0.5 size-4 text-muted-foreground" />
                   <div>
@@ -405,13 +384,14 @@ export default async function Page({ params }: { params: { slug: string } }) {
                 </div>
               </div>
 
-              <div className="prose prose-md dark:prose-invert max-w-none mt-3">
-                <ReactMarkdown>{event.description}</ReactMarkdown>
+              <div className="prose prose-md mt-3 max-w-none dark:prose-invert">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {event.description}
+                </ReactMarkdown>
               </div>
             </CardContent>
           </Card>
 
-          {/* Tickets */}
           <Card>
             <CardHeader>
               <CardTitle>Tickets</CardTitle>
@@ -480,7 +460,7 @@ export default async function Page({ params }: { params: { slug: string } }) {
                             <Plus className="size-3" />
                           </Button>
                         </div>
-                        <p className="mt-1 text-xs text-muted-foreground text-center">
+                        <p className="mt-1 text-center text-xs text-muted-foreground">
                           {soldOut ? "Sold out" : `${t.seats} left`}
                         </p>
                       </div>
@@ -491,7 +471,6 @@ export default async function Page({ params }: { params: { slug: string } }) {
             </CardContent>
           </Card>
 
-          {/* Venue */}
           <Card>
             <CardHeader>
               <CardTitle>Venue</CardTitle>
@@ -500,7 +479,7 @@ export default async function Page({ params }: { params: { slug: string } }) {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="rounded-lg overflow-hidden">
+              <div className="overflow-hidden rounded-lg">
                 <iframe
                   width="100%"
                   height="300"
@@ -512,7 +491,6 @@ export default async function Page({ params }: { params: { slug: string } }) {
           </Card>
         </div>
 
-        {/* Sidebar - Checkout */}
         <div className="grid content-start gap-6">
           <Card className="sticky top-20">
             <CardHeader>
@@ -599,22 +577,4 @@ export default async function Page({ params }: { params: { slug: string } }) {
       </div>
     </div>
   );
-}
-
-function normalizeEvent(data: ApiEventWire): Omit<
-  EdenEvent,
-  "startDate" | "endDate"
-> & {
-  startDate: string;
-  endDate: string;
-} {
-  return {
-    ...data,
-    startDate:
-      data.startDate instanceof Date
-        ? data.startDate.toISOString()
-        : data.startDate,
-    endDate:
-      data.endDate instanceof Date ? data.endDate.toISOString() : data.endDate,
-  };
 }
