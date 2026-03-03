@@ -1,19 +1,10 @@
 "use client";
 
-import {
-  Calendar,
-  MapPin,
-  Search,
-  SlidersHorizontal,
-  Sparkles,
-  X,
-} from "lucide-react";
+import { Calendar, MapPin, Search, X } from "lucide-react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/eden";
 import { useState } from "react";
@@ -42,90 +33,6 @@ type ExploreEvent = {
   posterImage: string | null;
   genre: string[];
 };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function parseStatus(value: unknown): EventStatus {
-  if (value === "LIVE" || value === "STOPPED" || value === "DRAFT") {
-    return value;
-  }
-
-  return "LIVE";
-}
-
-function parseIsoDate(value: unknown) {
-  if (value instanceof Date && !Number.isNaN(value.getTime())) {
-    return value.toISOString();
-  }
-
-  if (typeof value === "string") {
-    const parsed = new Date(value);
-    if (!Number.isNaN(parsed.getTime())) {
-      return parsed.toISOString();
-    }
-  }
-
-  return null;
-}
-
-function normalizeEvent(value: unknown): ExploreEvent | null {
-  if (!isRecord(value)) return null;
-
-  const id = value.id;
-  const title = value.title;
-  const slug = value.slug;
-  const location = value.location;
-  const startDate = parseIsoDate(value.startDate);
-
-  if (
-    typeof id !== "string" ||
-    typeof title !== "string" ||
-    typeof slug !== "string" ||
-    typeof location !== "string" ||
-    !startDate
-  ) {
-    return null;
-  }
-
-  const genre = Array.isArray(value.genre)
-    ? value.genre.filter((item): item is string => typeof item === "string")
-    : [];
-
-  return {
-    id,
-    title,
-    slug,
-    startDate,
-    location,
-    city: typeof value.city === "string" ? value.city : "",
-    status: parseStatus(value.status),
-    posterImage:
-      typeof value.posterImage === "string" ? value.posterImage : null,
-    genre,
-  };
-}
-
-function apiErrorMessage(value: unknown, fallback: string) {
-  if (isRecord(value) && typeof value.message === "string") {
-    return value.message;
-  }
-
-  return fallback;
-}
-
-function extractEventsPayload(payload: unknown) {
-  if (Array.isArray(payload)) {
-    return payload;
-  }
-
-  if (isRecord(payload) && Array.isArray(payload.data)) {
-    return payload.data;
-  }
-
-  return [];
-}
 
 function formatShortDate(iso: string) {
   return new Intl.DateTimeFormat("en-US", {
@@ -173,7 +80,8 @@ export default function ExplorePage() {
                 <button
                   type="button"
                   onClick={() => setQuery("")}
-                  className="absolute top-1/2 right-3 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                  className="absolute top-1/2 right-3 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
                   <X className="size-4" />
                 </button>
               ) : null}
@@ -247,22 +155,24 @@ function EventCard({ event }: { event: ExploreEvent }) {
       {event.posterImage ? (
         <DynamicImg
           src={event.posterImage}
-          className="h-full w-full rounded-lg aspect-16/7"
+          className="h-full w-full rounded-lg aspect-16/7 border"
         />
       ) : (
-        <div className="flex h-full w-full items-center justify-center rounded-lg aspect-video">
+        <div className="flex h-full w-full items-center justify-center rounded-lg aspect-16/7 border">
           <Calendar className="size-8 text-muted-foreground" />
         </div>
       )}
 
-      <div className="space-y-1.5 pt-1 px-2">
-        <div className="flex items-center gap-2">
-          {event.genre.slice(0, 2).map((genre) => (
-            <Badge key={genre} variant="secondary" className="text-xs">
-              {genre}
-            </Badge>
-          ))}
-        </div>
+      <div className="space-y-1.5 pt-2 px-1">
+        {event.genre.length > 0 && (
+          <div className="flex items-center gap-2">
+            {event.genre.slice(0, 2).map((genre) => (
+              <Badge key={genre} variant="info" className="text-xs">
+                {genre}
+              </Badge>
+            ))}
+          </div>
+        )}
         <h3 className="line-clamp-1 font-semibold text-md group-hover:underline">
           {event.title}
         </h3>

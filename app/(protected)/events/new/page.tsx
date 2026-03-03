@@ -1,9 +1,17 @@
 "use client";
 
 import * as React from "react";
-import { Image as ImageIcon, Link2, Plus, Trash2 } from "lucide-react";
+import {
+  Check,
+  Image as ImageIcon,
+  Link2,
+  Loader,
+  Plus,
+  Trash2,
+  X,
+} from "lucide-react";
 import type { Treaty } from "@elysiajs/eden";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -19,6 +27,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { api } from "@/lib/eden";
 import { cn } from "@/lib/utils";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectItem,
+  SelectPopup,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 type Tier = {
   id: string;
@@ -34,26 +50,11 @@ type CreateEventResponse = NonNullable<
   Exclude<Treaty.Data<typeof api.events.post>, { message: string }>
 >;
 
-function apiErrorMessage(value: unknown, fallback: string) {
-  if (
-    typeof value === "object" &&
-    value !== null &&
-    "message" in value &&
-    typeof (value as Record<string, unknown>).message === "string"
-  ) {
-    return (value as { message: string }).message;
-  }
-
-  return fallback;
-}
-
 function slugify(raw: string) {
   return raw
     .toLowerCase()
     .trim()
-    .replace(/['-]/g, "")
     .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
     .slice(0, 64);
 }
 
@@ -77,7 +78,6 @@ export default function EventCreator() {
 
   const [slug, setSlug] = React.useState("");
   const [slugTouched, setSlugTouched] = React.useState(false);
-
   const [coverUrl, setCoverUrl] = React.useState("");
   const [status, setStatus] = React.useState<EventStatus>("DRAFT");
 
@@ -97,6 +97,22 @@ export default function EventCreator() {
       note: "Front rows + early entry",
     },
   ]);
+
+  const {
+    data: slugUsed,
+    isLoading,
+    refetch,
+  } = useQuery({
+    queryKey: ["slug", slug],
+    queryFn: async () => {
+      const data = await api.events
+        .check({
+          slug,
+        })
+        .get();
+      return data;
+    },
+  });
 
   React.useEffect(() => {
     if (slugTouched) return;
@@ -184,24 +200,24 @@ export default function EventCreator() {
     }
   }
 
+  const statusList = [
+    { label: "Not listed", value: "DRAFT" },
+    { label: "Available for buyers", value: "LIVE" },
+    { label: "Stopped for buyers", value: "STOPPED" },
+  ];
+
   return (
     <div>
       <div className="space-y-1 mb-8">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Link2 className="size-3.5" />
-          <span className="font-mono text-xs">/e/{slug || "your-event"}</span>
-        </div>
         <h1 className="text-2xl font-semibold tracking-tight">
           Create an event
         </h1>
-        <p className="text-sm text-muted-foreground">
-          Details, URL slug, cover image, and ticket tiers.
-        </p>
       </div>
 
       <form
         onSubmit={onSubmit}
-        className="grid gap-6 lg:grid-cols-[1.25fr_.85fr]">
+        className="grid gap-6 lg:grid-cols-[1.25fr_.85fr]"
+      >
         <div className="grid gap-6">
           {/* Event Details */}
           <Card>
@@ -209,22 +225,29 @@ export default function EventCreator() {
               <CardTitle>Event details</CardTitle>
               <CardDescription>The basics people see first.</CardDescription>
             </CardHeader>
-            <CardContent className="grid gap-4">
+            <CardContent className="grid gap-7">
               <div className="grid gap-2">
                 <Label htmlFor="status">Status</Label>
-                <div className="relative">
-                  <select
-                    id="status"
-                    className={cn(
-                      "h-9 w-full rounded-lg border border-input bg-background px-3 text-sm shadow-xs",
-                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                    )}
-                    value={status}
-                    onChange={(e) => setStatus(e.target.value as EventStatus)}>
-                    <option value="DRAFT">Draft</option>
-                    <option value="LIVE">Live</option>
-                    <option value="STOPPED">Stopped</option>
-                  </select>
+                <div>
+                  <Select
+                    aria-label="Select status for event"
+                    defaultValue="DRAFT"
+                    items={statusList}
+                    onValueChange={(value) => {
+                      setStatus(value);
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectPopup alignItemWithTrigger={false}>
+                      {statusList.map(({ label, value }) => (
+                        <SelectItem key={value} value={value}>
+                          {label}
+                        </SelectItem>
+                      ))}
+                    </SelectPopup>
+                  </Select>
                 </div>
               </div>
               <div className="grid gap-2">
@@ -251,18 +274,15 @@ export default function EventCreator() {
 
               <div className="grid gap-2">
                 <Label htmlFor="description">
-                  Description (support markdown)
+                  Description (supports markdown)
                 </Label>
-                <textarea
+                <Textarea
                   id="description"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="What is it? Who is it for?"
-                  className={cn(
-                    "min-h-28 w-full resize-y rounded-md border bg-transparent px-3 py-2 text-sm shadow-xs outline-none",
-                    "placeholder:text-muted-foreground font-mono",
-                    "focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]",
-                  )}
+                  className="font-mono"
+                  rows={6}
                 />
               </div>
 
@@ -335,28 +355,47 @@ export default function EventCreator() {
             <CardContent className="grid gap-2">
               <Label htmlFor="slug">Slug</Label>
               <div className="relative">
-                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 select-none text-xs text-muted-foreground z-10">
+                <span className="pointer-events-none absolute left-5 top-1/2 -translate-y-1/2 select-none text-sm font-mono text-muted-foreground z-10">
                   /e/
                 </span>
                 <Input
                   id="slug"
                   value={slug}
                   onChange={(e) => {
-                    setSlugTouched(true);
                     setSlug(slugify(e.target.value));
+                    refetch();
                   }}
-                  onBlur={() => setSlugTouched(true)}
-                  className={cn("pl-7", !slugOk && "border-destructive")}
+                  className={cn(
+                    "px-11 py-1 font-mono",
+                    !slugOk && "border-destructive",
+                  )}
                   placeholder="night-market-sessions"
                   autoComplete="off"
                 />
+                <div className="pointer-events-none absolute right-5 top-1/2 -translate-y-1/2 select-none text-xs text-muted-foreground z-10">
+                  {isLoading ? (
+                    <Loader className="size-4 animate-spin" />
+                  ) : slugUsed && slugUsed.exists ? (
+                    <X className="size-4" />
+                  ) : (
+                    <Check className="size-4" />
+                  )}
+                </div>
               </div>
-              {!slugOk && (
-                <p className="text-xs text-destructive">
-                  Slug must be at least 3 characters and only use a-z, 0-9, and
-                  hyphens.
-                </p>
-              )}
+              <ul className="list-disc ml-4">
+                {!slugOk && (
+                  <li className="text-xs text-destructive">
+                    Slug must be at least 3 characters and only use a-z, 0-9,
+                    and hyphens.
+                  </li>
+                )}
+                {slugUsed && slugUsed.exists && (
+                  <li className="text-xs text-destructive">
+                    This slug is used by other event on this platform use any
+                    other slug.
+                  </li>
+                )}
+              </ul>
             </CardContent>
           </Card>
 
@@ -424,23 +463,11 @@ export default function EventCreator() {
                           variant="outline"
                           size="icon"
                           onClick={() => onRemoveTier(tier.id)}
-                          aria-label="Remove tier">
+                          aria-label="Remove tier"
+                        >
                           <Trash2 className="size-4" />
                         </Button>
                       </div>
-                    </div>
-                    <div className="mt-3 grid gap-2">
-                      <Label className="text-xs text-muted-foreground">
-                        Note (optional)
-                      </Label>
-                      <Input
-                        value={tier.note}
-                        onChange={(e) =>
-                          onUpdateTier(tier.id, { note: e.target.value })
-                        }
-                        placeholder="What does this tier include?"
-                        autoComplete="off"
-                      />
                     </div>
                   </div>
                 ))}
@@ -519,7 +546,8 @@ export default function EventCreator() {
                     variant="outline"
                     size="sm"
                     onClick={() => setCoverUrl("")}
-                    disabled={!coverUrl.trim()}>
+                    disabled={!coverUrl.trim()}
+                  >
                     Clear
                   </Button>
                 </div>
@@ -535,7 +563,8 @@ export default function EventCreator() {
                   !slugOk ||
                   tiers.length === 0 ||
                   createEventMutation.isPending
-                }>
+                }
+              >
                 {createEventMutation.isPending ? "Creating..." : "Create event"}
               </Button>
             </CardFooter>

@@ -10,12 +10,6 @@ function totalSeatsFromPrices(prices: unknown) {
   }, 0);
 }
 
-function toDate(value: string) {
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return null;
-  return parsed;
-}
-
 const eventCreateSchema = t.Object({
   title: t.String(),
   tagline: t.Optional(t.String()),
@@ -87,66 +81,42 @@ export const eventsRoutes = new Elysia({ prefix: "/events" })
   )
   .post(
     "/",
-    async ({ body, set }) => {
-      const startDate = toDate(body.startDate);
-
-      if (!startDate) {
-        set.status = 400;
-        return { message: "Invalid start date" };
+    async ({ body }) => {
+      if (body.endDate && new Date(body.startDate) >= new Date(body.endDate)) {
+        return { ok: false, message: "Slug already exists" };
       }
 
-      const endDate = body.endDate ? toDate(body.endDate) : undefined;
+      const totalTickets =
+        body.totalTickets ?? totalSeatsFromPrices(body.prices);
 
-      if (body.endDate && !endDate) {
-        set.status = 400;
-        return { message: "Invalid end date" };
-      }
+      const event = await prisma.event.create({
+        data: {
+          title: body.title,
+          tagline: body.tagline ?? null,
+          description: body.description,
+          slug: body.slug,
+          startDate: body.slug,
+          endDate: body.endDate ?? body.startDate,
+          location: body.location,
+          city: body.city ?? null,
+          contactEmail: body.contactEmail ?? null,
+          posterImage: body.posterImage ?? null,
+          creatorId: body.creatorId ?? null,
+          status: body.status ?? "DRAFT",
+          prices: body.prices ?? undefined,
+          totalTickets,
+          genre: body.genre ?? [],
+        },
+      });
 
-      try {
-        const totalTickets =
-          body.totalTickets ?? totalSeatsFromPrices(body.prices);
-
-        const event = await prisma.event.create({
-          data: {
-            title: body.title,
-            tagline: body.tagline ?? null,
-            description: body.description,
-            slug: body.slug,
-            startDate,
-            endDate: endDate ?? startDate,
-            location: body.location,
-            city: body.city ?? null,
-            contactEmail: body.contactEmail ?? null,
-            posterImage: body.posterImage ?? null,
-            creatorId: body.creatorId ?? null,
-            status: body.status ?? "DRAFT",
-            prices: body.prices ?? undefined,
-            totalTickets,
-            genre: body.genre ?? [],
-          },
-        });
-
-        return event;
-      } catch (error: unknown) {
-        if (
-          typeof error === "object" &&
-          error !== null &&
-          "code" in error &&
-          (error as { code?: string }).code === "P2002"
-        ) {
-          set.status = 409;
-          return { message: "Slug already exists" };
-        }
-
-        set.status = 500;
-        return { message: "Failed to create event" };
-      }
+      return event;
     },
     {
       body: eventCreateSchema,
     },
   )
   .put(
+    // has to work
     "/:id",
     async ({ params, body }) => {
       const data = await prisma.event.update({
@@ -164,20 +134,6 @@ export const eventsRoutes = new Elysia({ prefix: "/events" })
       body: eventUpdateSchema,
     },
   )
-  .delete(
-    "/:id",
-    async ({ params }) => {
-      const data = await prisma.event.delete({ where: { id: params.id } });
-      if (data == null) {
-        return { ok: true };
-      } else {
-        return { ok: false, message: "Delete failed" };
-      }
-    },
-    {
-      params: t.Object({ id: t.String() }),
-    },
-  )
   .get(
     "/slug/:slug",
     async ({ params }) => {
@@ -192,6 +148,21 @@ export const eventsRoutes = new Elysia({ prefix: "/events" })
         ok: true,
         data: event,
       };
+    },
+    {
+      params: t.Object({ slug: t.String() }),
+    },
+  )
+  .get(
+    "/check/:slug",
+    async ({ params }) => {
+      const event = await prisma.event.findUnique({
+        where: { slug: params.slug },
+      });
+      if (!event) {
+        return { exists: false };
+      }
+      return { exists: true };
     },
     {
       params: t.Object({ slug: t.String() }),

@@ -29,21 +29,6 @@ import { notFound } from "next/navigation";
 import Loading from "@/components/loading";
 import { toastManager } from "@/components/ui/toast";
 
-type EventData = {
-  id: string;
-  slug: string;
-  title: string;
-  tagline: string;
-  description: string;
-  startDate: string;
-  endDate: string | null;
-  location: string;
-  contactEmail: string | null;
-  posterImage: string | null;
-  totalTickets: number;
-  prices: unknown;
-};
-
 type Tier = {
   id: string;
   name: string;
@@ -51,6 +36,12 @@ type Tier = {
   seats: number;
   note?: string;
 };
+
+type Prices = {
+  name: string;
+  price: number;
+  seats: number;
+}[];
 
 type SelectedTier = Tier & { qty: number };
 
@@ -324,7 +315,8 @@ export default function Page({
             paymentNotice.status === "success"
               ? "border-emerald-200 bg-emerald-50 text-emerald-800"
               : "border-rose-200 bg-rose-50 text-rose-800",
-          )}>
+          )}
+        >
           {paymentNotice.message}
         </div>
       )}
@@ -367,7 +359,8 @@ export default function Page({
                       <p className="text-xs text-muted-foreground">Contact</p>
                       <a
                         className="text-sm font-medium"
-                        href={`mailto:${event.contactEmail}`}>
+                        href={`mailto:${event.contactEmail}`}
+                      >
                         {event.contactEmail}
                       </a>
                     </div>
@@ -413,7 +406,8 @@ export default function Page({
                       qty > 0 &&
                         "border-foreground/30 ring-1 ring-foreground/10",
                       soldOut && "opacity-60",
-                    )}>
+                    )}
+                  >
                     <div className="flex items-start justify-between gap-4">
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-semibold">{t.name}</p>
@@ -439,7 +433,8 @@ export default function Page({
                                 [t.id]: Math.max(0, (prev[t.id] || 0) - 1),
                               }))
                             }
-                            disabled={qty <= 0}>
+                            disabled={qty <= 0}
+                          >
                             <Minus className="size-3" />
                           </Button>
                           <div className="min-w-8 text-center font-mono text-sm">
@@ -456,7 +451,8 @@ export default function Page({
                                 [t.id]: Math.min(maxQty, (prev[t.id] || 0) + 1),
                               }))
                             }
-                            disabled={qty >= maxQty || soldOut}>
+                            disabled={qty >= maxQty || soldOut}
+                          >
                             <Plus className="size-3" />
                           </Button>
                         </div>
@@ -515,7 +511,8 @@ export default function Page({
                   {selectedTiers.map((t) => (
                     <div
                       key={t.id}
-                      className="flex items-center justify-between text-sm">
+                      className="flex items-center justify-between text-sm"
+                    >
                       <span>
                         {t.qty}x {t.name}
                       </span>
@@ -552,7 +549,8 @@ export default function Page({
                 className="w-full sm:w-auto"
                 onClick={() => {
                   setSelections({});
-                }}>
+                }}
+              >
                 Reset
               </Button>
               <Button
@@ -561,7 +559,8 @@ export default function Page({
                 onClick={onCheckout}
                 disabled={
                   selectedTiers.length === 0 || checkoutMutation.isPending
-                }>
+                }
+              >
                 {checkoutMutation.isPending ? "Processing..." : "Buy tickets"}
               </Button>
             </CardFooter>
