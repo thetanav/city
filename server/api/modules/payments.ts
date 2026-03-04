@@ -2,7 +2,6 @@ import { Elysia, t } from "elysia";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { stripeClient } from "@/lib/stripe";
-import { createTicketsFromSession } from "@/lib/payments";
 import type Stripe from "stripe";
 
 const checkoutSchema = t.Object({
@@ -16,10 +15,6 @@ const checkoutSchema = t.Object({
   ),
 });
 
-const confirmSchema = t.Object({
-  sessionId: t.String(),
-});
-
 type TierSelection = {
   id: string;
   name: string;
@@ -30,6 +25,7 @@ type RawTier = {
   id?: string;
   name?: string;
   price?: number;
+  seats?: number;
 };
 
 function normalizePrices(prices: unknown) {
@@ -65,7 +61,7 @@ function assertSelections(selections: TierSelection[], tiers: RawTier[]) {
     if (!tierByName.has(nameKey)) tierByName.set(nameKey, tier);
   });
 
-  selections.forEach((selection, index) => {
+  selections.forEach((selection) => {
     const qty = Math.max(0, Math.floor(selection.qty));
     if (qty <= 0) return;
     let matchingTier = selection.id ? tierById.get(selection.id) : undefined;
@@ -82,6 +78,22 @@ function assertSelections(selections: TierSelection[], tiers: RawTier[]) {
 
     if (!matchingTier) {
       errors.push(`Unknown tier selection: ${selection.name}`);
+      return;
+    }
+
+    const availableSeats =
+      typeof matchingTier.seats === "number" &&
+      Number.isFinite(matchingTier.seats)
+        ? matchingTier.seats
+        : 0;
+
+    if (qty > availableSeats) {
+      const name = formatTierName(matchingTier, selection.name);
+      errors.push(
+        availableSeats <= 0
+          ? `${name} is sold out`
+          : `Only ${availableSeats} seat(s) left for ${name}`,
+      );
       return;
     }
 
@@ -133,6 +145,11 @@ export const paymentsRoutes = new Elysia({ prefix: "/payments" })
       if (!event) {
         set.status = 404;
         return { message: "Event not found" };
+      }
+
+      if (event.status !== "LIVE") {
+        set.status = 400;
+        return { message: "Event is not accepting purchases" };
       }
 
       const tiers = normalizePrices(event.prices);
@@ -212,50 +229,5 @@ export const paymentsRoutes = new Elysia({ prefix: "/payments" })
     },
     {
       body: checkoutSchema,
-    },
-  )
-  .post(
-    "/confirm",
-    async ({ body, set }) => {
-      try {
-        const session = await stripeClient.checkout.sessions.retrieve(
-          body.sessionId,
-          { expand: ["line_items"] },
-        );
-
-        if (session.payment_status !== "paid") {
-          set.status = 409;
-          return { message: "Payment not completed" };
-        }
-
-        const ticketResult = await createTicketsFromSession(session);
-        if (
-          ticketResult.status !== "created" &&
-          ticketResult.status !== "skipped"
-        ) {
-          set.status = 500;
-          return { message: "Payment verified but ticket issuance failed" };
-        }
-
-        const paymentId = session.payment_intent?.toString() ?? null;
-        const eventId = session.metadata?.eventId ?? null;
-        const userId = session.metadata?.userId ?? null;
-
-        return {
-          ok: true,
-          status: "processed",
-          paymentId,
-          eventId,
-          userId,
-          issuedTickets: ticketResult.createdTickets.length,
-        };
-      } catch (error) {
-        console.error("[payments] Failed to confirm payment:", error);
-        set.status = 500;
-        return { message: "Failed to confirm payment" };
-      }
-    },
-    {
-      body: confirmSchema,
     },
   );

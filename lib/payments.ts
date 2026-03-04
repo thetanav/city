@@ -15,7 +15,8 @@ type TicketCreateStatus =
   | "skipped"
   | "missing_event"
   | "missing_items"
-  | "missing_metadata";
+  | "missing_metadata"
+  | "insufficient_seats";
 
 export type TicketCreateResult = {
   status: TicketCreateStatus;
@@ -23,9 +24,11 @@ export type TicketCreateResult = {
 };
 
 type PriceTier = {
+  id?: string;
   name?: string;
   price?: number;
   seats?: number;
+  note?: string;
 };
 
 function totalSeatsFromPrices(prices: unknown) {
@@ -59,6 +62,7 @@ export async function createTicketsFromSession(
   const fullSession = await ensureSessionWithItems(session);
   const paymentId = fullSession.payment_intent?.toString() ?? null;
 
+  // Idempotency: if tickets already exist for this payment, skip
   if (paymentId) {
     const existing = await prisma.ticket.findFirst({
       where: { paymentId, eventId },
@@ -78,14 +82,7 @@ export async function createTicketsFromSession(
     return { status: "missing_items", createdTickets: [] };
   }
 
-  const event = await prisma.event.findUnique({ where: { id: eventId } });
-  if (!event) {
-    return { status: "missing_event", createdTickets: [] };
-  }
-
-  const tiers = Array.isArray(event.prices) ? event.prices : [];
-  const createdTickets: CreatedTicket[] = [];
-
+  // Build qty-per-tier map from Stripe line items
   const qtyByName = new Map<string, number>();
   for (const item of items) {
     const name = item.description ?? "General";
@@ -93,35 +90,62 @@ export async function createTicketsFromSession(
     qtyByName.set(name, (qtyByName.get(name) ?? 0) + qty);
   }
 
-  const updatedPrices = tiers.map((tier) => {
-    if (!tier || typeof tier !== "object") return tier;
-    const typedTier = tier as PriceTier;
-    const name = typeof typedTier.name === "string" ? typedTier.name : "";
-    const seats =
-      typeof typedTier.seats === "number" && Number.isFinite(typedTier.seats)
-        ? typedTier.seats
-        : undefined;
-    if (!name || seats === undefined) return tier;
-    const qty = qtyByName.get(name) ?? 0;
-    if (qty <= 0) return tier;
-    return { ...typedTier, seats: Math.max(0, seats - qty) };
-  });
+  // All ticket creation + seat decrement happens inside a single transaction
+  // with a fresh read of the event to avoid race conditions
+  const createdTickets: CreatedTicket[] = [];
 
-  const totalTickets = totalSeatsFromPrices(updatedPrices);
+  const result = await prisma.$transaction(async (tx) => {
+    // Read the event inside the transaction for consistency
+    const event = await tx.event.findUnique({ where: { id: eventId } });
+    if (!event) return "missing_event" as const;
 
-  await prisma.$transaction(async (tx) => {
+    const tiers: PriceTier[] = Array.isArray(event.prices)
+      ? (event.prices as PriceTier[])
+      : [];
+
+    // Validate seat availability for every requested tier
+    for (const [tierName, requestedQty] of qtyByName) {
+      const tier = tiers.find(
+        (t) => typeof t.name === "string" && t.name === tierName,
+      );
+      const available =
+        tier && typeof tier.seats === "number" && Number.isFinite(tier.seats)
+          ? tier.seats
+          : 0;
+
+      if (requestedQty > available) {
+        console.error(
+          `[payments] Insufficient seats for "${tierName}": requested=${requestedQty}, available=${available}`,
+        );
+        return "insufficient_seats" as const;
+      }
+    }
+
+    // Decrement seats atomically (we hold the row lock via the transaction)
+    const updatedPrices = tiers.map((tier) => {
+      const name = typeof tier.name === "string" ? tier.name : "";
+      const seats =
+        typeof tier.seats === "number" && Number.isFinite(tier.seats)
+          ? tier.seats
+          : undefined;
+
+      if (!name || seats === undefined) return tier;
+      const qty = qtyByName.get(name) ?? 0;
+      if (qty <= 0) return tier;
+      return { ...tier, seats: seats - qty };
+    });
+
+    const totalTickets = totalSeatsFromPrices(updatedPrices);
+
+    // Create ticket records
     for (const item of items) {
       const name = item.description ?? "General";
       const qty = item.quantity ?? 1;
       const unitAmount = item.price?.unit_amount ?? 0;
 
       const matchedTier = tiers.find(
-        (tier) =>
-          typeof tier === "object" &&
-          tier !== null &&
-          "name" in tier &&
-          (tier as { name?: string }).name === name,
-      ) as { name?: string; price?: number } | undefined;
+        (t) => typeof t.name === "string" && t.name === name,
+      );
 
       const resolvedPrice =
         typeof matchedTier?.price === "number"
@@ -142,25 +166,43 @@ export async function createTicketsFromSession(
       createdTickets.push({ tierName: name, qty, unitPrice: resolvedPrice });
     }
 
-    if (Array.isArray(event.prices)) {
-      await tx.event.update({
-        where: { id: event.id },
-        data: {
-          prices: updatedPrices,
-          totalTickets,
-        },
-      });
-    }
+    // Persist decremented seats + totalTickets
+    await tx.event.update({
+      where: { id: event.id },
+      data: {
+        prices: updatedPrices,
+        totalTickets,
+      },
+    });
+
+    return "created" as const;
   });
 
+  if (result !== "created") {
+    return { status: result, createdTickets: [] };
+  }
+
+  // Send confirmation email (non-blocking -- never fail the ticket flow)
   if (userId && createdTickets.length > 0) {
     try {
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { email: true, name: true },
-      });
+      const [user, event] = await Promise.all([
+        prisma.user.findUnique({
+          where: { id: userId },
+          select: { email: true, name: true },
+        }),
+        prisma.event.findUnique({
+          where: { id: eventId },
+          select: {
+            title: true,
+            startDate: true,
+            endDate: true,
+            location: true,
+            slug: true,
+          },
+        }),
+      ]);
 
-      if (user?.email) {
+      if (user?.email && event) {
         const totalAmount = fullSession.amount_total ?? 0;
 
         await sendTicketConfirmationEmail({

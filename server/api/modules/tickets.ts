@@ -1,40 +1,62 @@
 import { Elysia, t } from "elysia";
 import { prisma } from "@/lib/prisma";
-
-const ticketCreateSchema = t.Object({
-  tierName: t.String(),
-  qty: t.Number(),
-  eventId: t.String(),
-  unitPrice: t.Number(),
-  paymentId: t.Optional(t.String()),
-  userId: t.Optional(t.String()),
-  valid: t.Optional(t.Boolean()),
-});
-
-const ticketUpdateSchema = t.Partial(ticketCreateSchema);
+import { auth } from "@/lib/auth";
 
 export const ticketsRoutes = new Elysia({ prefix: "/tickets" })
   .get(
     "/",
-    async ({ query }) =>
-      prisma.ticket.findMany({
-        where: {
-          userId: typeof query.userId === "string" ? query.userId : undefined,
-          eventId: typeof query.eventId === "string" ? query.eventId : undefined,
-        },
+    async ({ query, request, set }) => {
+      const session = await auth.api.getSession({ headers: request.headers });
+      if (!session?.user) {
+        set.status = 401;
+        return { message: "Unauthorized" };
+      }
+
+      const where: Record<string, unknown> = {};
+
+      if (query.eventId) {
+        where.eventId = query.eventId;
+      }
+
+      // Users can only list their own tickets unless they own the event
+      if (query.userId && query.userId === session.user.id) {
+        where.userId = query.userId;
+      } else if (query.eventId) {
+        const event = await prisma.event.findUnique({
+          where: { id: query.eventId },
+          select: { creatorId: true },
+        });
+
+        if (event?.creatorId !== session.user.id) {
+          // Not the event creator -- scope to own tickets only
+          where.userId = session.user.id;
+        }
+      } else {
+        where.userId = session.user.id;
+      }
+
+      return prisma.ticket.findMany({
+        where,
         orderBy: { createdAt: "desc" },
         include: { event: true },
-      }),
+      });
+    },
     {
       query: t.Object({
         userId: t.Optional(t.String()),
         eventId: t.Optional(t.String()),
       }),
-    }
+    },
   )
   .get(
     "/:id",
-    async ({ params, set }) => {
+    async ({ params, request, set }) => {
+      const session = await auth.api.getSession({ headers: request.headers });
+      if (!session?.user) {
+        set.status = 401;
+        return { message: "Unauthorized" };
+      }
+
       const ticket = await prisma.ticket.findUnique({
         where: { id: params.id },
         include: { event: true },
@@ -45,58 +67,54 @@ export const ticketsRoutes = new Elysia({ prefix: "/tickets" })
         return { message: "Ticket not found" };
       }
 
+      // Allow access if user owns the ticket or is the event creator
+      const isOwner = ticket.userId === session.user.id;
+      const isCreator = ticket.event.creatorId === session.user.id;
+
+      if (!isOwner && !isCreator) {
+        set.status = 403;
+        return { message: "Forbidden" };
+      }
+
       return ticket;
     },
     {
       params: t.Object({ id: t.String() }),
-    }
-  )
-  .post(
-    "/",
-    async ({ body, set }) => {
-      try {
-        const ticket = await prisma.ticket.create({
-          data: {
-            tierName: body.tierName,
-            qty: body.qty,
-            eventId: body.eventId,
-            unitPrice: body.unitPrice,
-            paymentId: body.paymentId ?? null,
-            userId: body.userId ?? null,
-            valid: body.valid ?? true,
-          },
-          include: { event: true },
-        });
-        return ticket;
-      } catch (error: unknown) {
-        if (
-          typeof error === "object" &&
-          error !== null &&
-          "code" in error &&
-          (error as { code?: string }).code === "P2003"
-        ) {
-          set.status = 400;
-          return { message: "Invalid event or user reference" };
-        }
-
-        set.status = 500;
-        return { message: "Failed to create ticket" };
-      }
     },
-    {
-      body: ticketCreateSchema,
-    }
   )
   .put(
     "/:id",
-    async ({ params, body, set }) => {
+    async ({ params, body, request, set }) => {
+      const session = await auth.api.getSession({ headers: request.headers });
+      if (!session?.user) {
+        set.status = 401;
+        return { message: "Unauthorized" };
+      }
+
+      const ticket = await prisma.ticket.findUnique({
+        where: { id: params.id },
+        include: { event: { select: { creatorId: true } } },
+      });
+
+      if (!ticket) {
+        set.status = 404;
+        return { message: "Ticket not found" };
+      }
+
+      // Only the event creator can update tickets (e.g. toggle validity)
+      if (ticket.event.creatorId !== session.user.id) {
+        set.status = 403;
+        return { message: "Only the event organizer can update tickets" };
+      }
+
+      // Only allow toggling validity -- no other field changes
       try {
-        const ticket = await prisma.ticket.update({
+        const updated = await prisma.ticket.update({
           where: { id: params.id },
-          data: { ...body, userId: body.userId ?? undefined },
+          data: { valid: body.valid },
           include: { event: true },
         });
-        return ticket;
+        return updated;
       } catch (error: unknown) {
         if (
           typeof error === "object" &&
@@ -107,38 +125,12 @@ export const ticketsRoutes = new Elysia({ prefix: "/tickets" })
           set.status = 404;
           return { message: "Ticket not found" };
         }
-
         set.status = 500;
         return { message: "Failed to update ticket" };
       }
     },
     {
       params: t.Object({ id: t.String() }),
-      body: ticketUpdateSchema,
-    }
-  )
-  .delete(
-    "/:id",
-    async ({ params, set }) => {
-      try {
-        await prisma.ticket.delete({ where: { id: params.id } });
-        return { ok: true };
-      } catch (error: unknown) {
-        if (
-          typeof error === "object" &&
-          error !== null &&
-          "code" in error &&
-          (error as { code?: string }).code === "P2025"
-        ) {
-          set.status = 404;
-          return { message: "Ticket not found" };
-        }
-
-        set.status = 500;
-        return { message: "Failed to delete ticket" };
-      }
+      body: t.Object({ valid: t.Boolean() }),
     },
-    {
-      params: t.Object({ id: t.String() }),
-    }
   );

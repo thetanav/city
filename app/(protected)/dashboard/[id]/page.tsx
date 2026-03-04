@@ -1,15 +1,7 @@
 "use client";
 
-import Link from "next/link";
-
 import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-  CardDescription,
-  CardHeader,
-  CardPanel,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardHeader, CardPanel } from "@/components/ui/card";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { use, useState } from "react";
 import { api } from "@/lib/eden";
@@ -31,9 +23,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  ArrowDown01,
+  ArrowDown10,
   CreditCard,
   Hammer,
-  Hash,
   MoreVertical,
   Search,
   X,
@@ -43,6 +36,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@/components/ui/menu";
 import { Checkbox } from "@/components/ui/checkbox";
+
+type TicketSortField = "purchased" | "qty" | "totalPrice" | "status" | "tier";
+type TicketSortOrder = "asc" | "dsc";
 
 function formatMoney(value: number) {
   return new Intl.NumberFormat("en-US", {
@@ -96,13 +92,43 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(0);
   const [selected, setSelected] = useState<string[]>([]);
+  const [filter, setFilter] = useState<{
+    field: TicketSortField;
+    order: TicketSortOrder;
+  }>({
+    field: "purchased",
+    order: "dsc",
+  });
+
+  const toggleSort = (field: TicketSortField) => {
+    setPage(0);
+    setFilter((current) => {
+      if (current.field === field) {
+        return {
+          field,
+          order: current.order === "asc" ? "dsc" : "asc",
+        };
+      }
+
+      return { field, order: "dsc" };
+    });
+  };
+
+  const sortSuffix = (field: TicketSortField) => {
+    if (filter.field !== field) return "";
+    return filter.order === "asc" ? (
+      <ArrowDown01 className="size-4" />
+    ) : (
+      <ArrowDown10 className="size-4" />
+    );
+  };
 
   const {
     data: tickets,
     isFetching,
     isPending,
   } = useQuery({
-    queryKey: ["dashboard", slug, page, query],
+    queryKey: ["dashboard", slug, page, query, filter.field, filter.order],
     placeholderData: keepPreviousData,
     staleTime: 60_000,
     queryFn: async () => {
@@ -111,6 +137,7 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
           query,
           offset: page * 10,
           limit: 10,
+          filter,
         },
       });
       return data;
@@ -118,6 +145,13 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
   });
 
   if (tickets && !tickets.ok) return notFound();
+
+  const soldCount = tickets?.totalCount ?? 0;
+  const remainingCount = tickets?.totalRemaining ?? 0;
+  const totalTickets = soldCount + remainingCount;
+  const soldPercent = tickets?.soldPercentage ?? 0;
+  const avgTicketPrice = tickets?.avgTicketPrice ?? 0;
+  const invalidEntries = tickets?.invalidEntries ?? 0;
 
   return (
     <div className="space-y-6">
@@ -127,53 +161,42 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
             {tickets?.title}
           </h1>
           <p className="text-sm text-muted-foreground">
-            {new Date(tickets?.startDate).toLocaleDateString(undefined, {
-              month: "short",
-              day: "numeric",
-              year: "numeric",
-            })}{" "}
-            at {tickets?.location}
+            {tickets?.startDate
+              ? `${new Date(tickets.startDate).toLocaleDateString(undefined, {
+                  month: "short",
+                  day: "numeric",
+                  year: "numeric",
+                })} at ${tickets.location}`
+              : "Loading event details..."}
           </p>
         </div>
       </section>
 
-      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader>
-            <CardDescription>Total Sold</CardDescription>
-            <CardTitle>{tickets?.totalCount}</CardTitle>
-          </CardHeader>
-          <CardPanel className="pt-0 text-sm text-muted-foreground">
-            of {tickets?.totalCount + tickets?.totalRemaining} tickets
-          </CardPanel>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardDescription>Total Profit</CardDescription>
-            <CardTitle>{formatMoney(tickets?.grossRevenue!)}</CardTitle>
-          </CardHeader>
-          <CardPanel className="pt-0 text-sm text-muted-foreground">
-            gross ticket revenue
-          </CardPanel>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardDescription>Remaining</CardDescription>
-            <CardTitle>{tickets?.remaining}</CardTitle>
-          </CardHeader>
-          <CardPanel className="pt-0 text-sm text-muted-foreground">
-            {tickets?.soldPercentage.toFixed(1)}% sold
-          </CardPanel>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardDescription>Average Ticket Price</CardDescription>
-            <CardTitle>{formatMoney(tickets?.avgTicketPrice)}</CardTitle>
-          </CardHeader>
-          <CardPanel className="pt-0 text-sm text-muted-foreground">
-            {tickets?.totalCount} records, {tickets?.invalidEntries} invalid
-          </CardPanel>
-        </Card>
+      <section>
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
+          <p>
+            <span className="text-muted-foreground">Sold:</span>{" "}
+            <span className="font-medium">
+              {soldCount}/{totalTickets}
+            </span>
+          </p>
+          <p>
+            <span className="text-muted-foreground">Remaining:</span>{" "}
+            <span className="font-medium">{remainingCount}</span>
+          </p>
+          <p>
+            <span className="text-muted-foreground">Avg price:</span>{" "}
+            <span className="font-medium">{formatMoney(avgTicketPrice)}</span>
+          </p>
+          <p>
+            <span className="text-muted-foreground">Sold:</span>{" "}
+            <span className="font-medium">{soldPercent.toFixed(1)}%</span>
+          </p>
+          <p>
+            <span className="text-muted-foreground">Invalid:</span>{" "}
+            <span className="font-medium">{invalidEntries}</span>
+          </p>
+        </div>
       </section>
 
       <section className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
@@ -191,7 +214,10 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
           {query.length > 0 ? (
             <button
               type="button"
-              onClick={() => setQuery("")}
+              onClick={() => {
+                setQuery("");
+                setPage(0);
+              }}
               className="absolute top-1/2 right-3 -translate-y-1/2 text-muted-foreground hover:text-foreground"
             >
               <X className="size-4" />
@@ -205,7 +231,7 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
       ) : (
         <div>
           <section>
-            {tickets?.totalCount.length === 0 ? (
+            {tickets?.totalCount === 0 ? (
               <p className="text-sm text-muted-foreground">
                 No tickets sold yet.
               </p>
@@ -232,22 +258,52 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
                         Buyer
                       </TableHead>
                       <TableHead className="py-3 pr-4 font-medium">
-                        Tier
+                        <button
+                          type="button"
+                          className="cursor-pointer hover:text-foreground/80 flex gap-1"
+                          onClick={() => toggleSort("tier")}
+                        >
+                          Tier{sortSuffix("tier")}
+                        </button>
                       </TableHead>
                       <TableHead className="py-3 pr-4 font-medium">
-                        Qty
+                        <button
+                          type="button"
+                          className="cursor-pointer hover:text-foreground/80 flex gap-1"
+                          onClick={() => toggleSort("qty")}
+                        >
+                          Qty{sortSuffix("qty")}
+                        </button>
                       </TableHead>
                       <TableHead className="py-3 pr-4 font-medium">
                         Unit Price
                       </TableHead>
                       <TableHead className="py-3 pr-4 font-medium">
-                        Total
+                        <button
+                          type="button"
+                          className="cursor-pointer hover:text-foreground/80 flex gap-1"
+                          onClick={() => toggleSort("totalPrice")}
+                        >
+                          Total{sortSuffix("totalPrice")}
+                        </button>
                       </TableHead>
                       <TableHead className="py-3 pr-4 font-medium">
-                        Status
+                        <button
+                          type="button"
+                          className="cursor-pointer hover:text-foreground/80 flex gap-1"
+                          onClick={() => toggleSort("status")}
+                        >
+                          Status{sortSuffix("status")}
+                        </button>
                       </TableHead>
                       <TableHead className="py-3 pr-0 font-medium">
-                        Purchased
+                        <button
+                          type="button"
+                          className="cursor-pointer hover:text-foreground/80 flex gap-1"
+                          onClick={() => toggleSort("purchased")}
+                        >
+                          Purchased{sortSuffix("purchased")}
+                        </button>
                       </TableHead>
                       <TableHead className="py-3 pr-0">
                         <Menu>

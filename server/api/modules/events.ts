@@ -1,6 +1,31 @@
 import { Elysia, t } from "elysia";
 import { prisma } from "@/lib/prisma";
 
+type TicketSortField = "qty" | "totalPrice" | "purchased" | "status" | "tier";
+type TicketSortOrder = "asc" | "desc" | "dsc";
+
+function resolveTicketOrderBy(
+  filter: { field: TicketSortField; order: TicketSortOrder } | undefined,
+) {
+  const field = filter?.field ?? "purchased";
+  const direction: "asc" | "desc" =
+    filter?.order === "asc" ? "asc" : "desc";
+
+  switch (field) {
+    case "qty":
+      return { qty: direction };
+    case "totalPrice":
+      return { unitPrice: direction };
+    case "status":
+      return { valid: direction };
+    case "tier":
+      return { tierName: direction };
+    case "purchased":
+    default:
+      return { createdAt: direction };
+  }
+}
+
 function totalSeatsFromPrices(prices: unknown) {
   if (!Array.isArray(prices)) return 0;
   return prices.reduce((sum, tier) => {
@@ -170,10 +195,10 @@ export const eventsRoutes = new Elysia({ prefix: "/events" })
   .get(
     "/tickets/:slug",
     async ({ params, query }) => {
-      console.log(params, query);
       const event = await prisma.event.findUnique({
         where: { slug: params.slug },
         select: {
+          id: true,
           tickets: true,
           totalTickets: true,
           title: true,
@@ -183,17 +208,27 @@ export const eventsRoutes = new Elysia({ prefix: "/events" })
         },
       });
       if (!event) return { ok: false };
+
+      const where = query.query
+        ? {
+            eventId: event.id,
+            user: {
+              is: {
+                name: { contains: query.query, mode: "insensitive" as const },
+              },
+            },
+          }
+        : {
+            eventId: event.id,
+          };
+
+      const totalTicketCount = await prisma.ticket.count({ where });
+
       const data = await prisma.ticket.findMany({
-        orderBy: { createdAt: "asc" },
+        orderBy: resolveTicketOrderBy(query.filter),
         take: query.limit,
         skip: query.offset,
-        where: {
-          user: {
-            name: query.query
-              ? { contains: query.query, mode: "insensitive" }
-              : undefined,
-          },
-        },
+        where,
         select: {
           id: true,
           tierName: true,
@@ -238,10 +273,10 @@ export const eventsRoutes = new Elysia({ prefix: "/events" })
         avgTicketPrice,
         invalidEntries,
         totalCount: soldCount,
-        totalPages: Math.ceil(soldCount / query.limit),
+        totalPages: Math.ceil(totalTicketCount / query.limit),
         limit: query.limit,
         pageOffset: query.offset,
-        nextPage: query.offset + query.limit < (await prisma.event.count()),
+        nextPage: query.offset + query.limit < totalTicketCount,
         previousPage: query.offset > 0,
         data,
       };
@@ -251,6 +286,16 @@ export const eventsRoutes = new Elysia({ prefix: "/events" })
         offset: t.Number(),
         limit: t.Number(),
         query: t.String(),
+        filter: t.Object({
+          field: t.Union([
+            t.Literal("qty"),
+            t.Literal("totalPrice"),
+            t.Literal("purchased"),
+            t.Literal("status"),
+            t.Literal("tier"),
+          ]),
+          order: t.Union([t.Literal("asc"), t.Literal("desc"), t.Literal("dsc")]),
+        }),
       }),
       params: t.Object({ slug: t.String() }),
     },

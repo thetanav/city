@@ -19,7 +19,7 @@ export async function POST(request: Request) {
       signature,
       process.env.STRIPE_WEBHOOK_SECRET!,
     );
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       { message: "Invalid signature" },
       { status: 400 },
@@ -27,7 +27,35 @@ export async function POST(request: Request) {
   }
 
   if (event.type === "checkout.session.completed") {
-    await createTicketsFromSession(event.data.object as Stripe.Checkout.Session);
+    const session = event.data.object as Stripe.Checkout.Session;
+
+    try {
+      const result = await createTicketsFromSession(session);
+
+      if (result.status === "created") {
+        console.log(
+          `[webhook] Tickets created for payment ${session.payment_intent}: ${result.createdTickets.length} ticket(s)`,
+        );
+      } else if (result.status === "skipped") {
+        console.log(
+          `[webhook] Duplicate webhook for payment ${session.payment_intent}, skipped`,
+        );
+      } else {
+        console.error(
+          `[webhook] Ticket creation returned "${result.status}" for payment ${session.payment_intent}`,
+        );
+      }
+    } catch (err) {
+      console.error(
+        `[webhook] Failed to process checkout.session.completed for ${session.id}:`,
+        err,
+      );
+      // Return 500 so Stripe retries the webhook
+      return NextResponse.json(
+        { message: "Ticket creation failed" },
+        { status: 500 },
+      );
+    }
   }
 
   return NextResponse.json({ received: true });

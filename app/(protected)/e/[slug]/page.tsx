@@ -37,12 +37,6 @@ type Tier = {
   note?: string;
 };
 
-type Prices = {
-  name: string;
-  price: number;
-  seats: number;
-}[];
-
 type SelectedTier = Tier & { qty: number };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -57,8 +51,8 @@ function formatMoney(n: number) {
   }).format(n);
 }
 
-function normalizeTiers(prices: any, totalTickets: number) {
-  if (!Array.isArray(prices)) return [] as Tier[];
+function normalizeTiers(prices: unknown, totalTickets: number): Tier[] {
+  if (!Array.isArray(prices)) return [];
 
   return prices.map((item, index) => {
     if (!isRecord(item)) {
@@ -105,19 +99,6 @@ function extractCheckoutUrl(payload: unknown) {
   return null;
 }
 
-function extractConfirmStatus(payload: unknown) {
-  if (!isRecord(payload)) return null;
-  return payload.status === "processed" || payload.status === "pending"
-    ? payload.status
-    : null;
-}
-
-function apiErrorMessage(value: unknown, fallback: string): string {
-  if (isRecord(value) && typeof value.message === "string")
-    return value.message;
-  return fallback;
-}
-
 export default function Page({
   params,
 }: {
@@ -159,23 +140,6 @@ export default function Page({
       .map((tier) => ({ ...tier, qty: selections[tier.id] }));
   }, [tiers, selections]);
 
-  const confirmPaymentMutation = useMutation({
-    mutationFn: async (sessionId: string) => {
-      const { data, error } = await api.payments.confirm.post({ sessionId });
-
-      if (error) {
-        throw new Error("We could not confirm your payment.");
-      }
-
-      const status = extractConfirmStatus(data);
-      if (!status) {
-        throw new Error("We could not confirm your payment.");
-      }
-
-      return status;
-    },
-  });
-
   const checkoutMutation = useMutation({
     mutationFn: async () => {
       if (!event || selectedTiers.length === 0) {
@@ -200,53 +164,26 @@ export default function Page({
     },
   });
 
+  // Detect payment success/cancel from Stripe redirect URL params
   useEffect(() => {
     if (!isSuccess) return;
 
     const search = new URLSearchParams(window.location.search);
     const payment = search.get("payment");
-    const sessionId = search.get("session_id");
 
-    if (payment !== "success" || !sessionId) return;
-
-    let active = true;
-
-    const confirmPayment = async () => {
-      try {
-        const status = await confirmPaymentMutation.mutateAsync(sessionId);
-        if (!active) return;
-
-        if (status === "processed") {
-          setPaymentNotice({
-            status: "success",
-            message:
-              "Payment confirmed. Your tickets are ready and a confirmation email is on the way.",
-          });
-        } else {
-          setPaymentNotice({
-            status: "success",
-            message:
-              "Payment received. We are finalizing your tickets and will email you shortly.",
-          });
-        }
-      } catch (err) {
-        if (!active) return;
-
-        const message =
-          err instanceof Error
-            ? err.message
-            : "We could not confirm your payment.";
-
-        setPaymentNotice({ status: "error", message });
-      }
-    };
-
-    confirmPayment();
-
-    return () => {
-      active = false;
-    };
-  }, [confirmPaymentMutation, isSuccess]);
+    if (payment === "success") {
+      setPaymentNotice({
+        status: "success",
+        message:
+          "Payment confirmed! Your tickets are being prepared and a confirmation email is on the way.",
+      });
+    } else if (payment === "cancel") {
+      setPaymentNotice({
+        status: "error",
+        message: "Payment was cancelled. No tickets were issued.",
+      });
+    }
+  }, [isSuccess]);
 
   const subtotal = selectedTiers.reduce(
     (acc, tier) => acc + tier.price * tier.qty,
@@ -402,10 +339,9 @@ export default function Page({
                   <div
                     key={t.id}
                     className={cn(
-                      "rounded-lg border p-4",
-                      qty > 0 &&
-                        "border-foreground/30 ring-1 ring-foreground/10",
-                      soldOut && "opacity-60",
+                      "rounded-lg border border-dashed p-4",
+                      qty > 0 && "border-foreground/60",
+                      soldOut && "border-foreground/30",
                     )}
                   >
                     <div className="flex items-start justify-between gap-4">
@@ -504,7 +440,7 @@ export default function Page({
             </CardHeader>
             <CardContent className="grid gap-4">
               {selectedTiers.length > 0 && (
-                <div className="grid gap-2 rounded-lg border p-4">
+                <div className="grid gap-2">
                   <p className="text-xs font-medium text-muted-foreground">
                     Your selection
                   </p>
@@ -522,7 +458,7 @@ export default function Page({
                 </div>
               )}
 
-              <div className="grid gap-2 rounded-lg border p-4">
+              <div className="grid gap-2 rounded-lg border border-dashed p-4">
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Subtotal</span>
                   <span className="font-medium">{formatMoney(subtotal)}</span>
