@@ -61,7 +61,7 @@ export default async function DashboardPage() {
       ) : (
         <section className="grid gap-4 sm:grid-cols-2">
           {events.map((event) => (
-            <Link key={event.id} href={`/dashboard/${event.id}`}>
+            <Link key={event.id} href={`/dashboard/${event.slug}`}>
               <Card className="hover:bg-muted/50 transition-colors cursor-pointer">
                 <CardContent className="space-y-3 py-5">
                   <div className="space-y-1">

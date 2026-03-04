@@ -1,8 +1,6 @@
-import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
-import { headers } from "next/headers";
+"use client";
+
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
 
 import { Badge } from "@/components/ui/badge";
 import {
@@ -12,12 +10,39 @@ import {
   CardPanel,
   CardTitle,
 } from "@/components/ui/card";
-
-type PageProps = {
-  params: Promise<{
-    id: string;
-  }>;
-};
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { use, useState } from "react";
+import { api } from "@/lib/eden";
+import { notFound } from "next/navigation";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  CreditCard,
+  Hammer,
+  Hash,
+  MoreVertical,
+  Search,
+  X,
+} from "lucide-react";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "@/components/ui/tooltip";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@/components/ui/menu";
+import { Checkbox } from "@/components/ui/checkbox";
 
 function formatMoney(value: number) {
   return new Intl.NumberFormat("en-US", {
@@ -31,80 +56,83 @@ function formatDate(value: Date) {
   return value.toLocaleString(undefined, {
     month: "short",
     day: "numeric",
-    year: "numeric",
     hour: "numeric",
     minute: "2-digit",
   });
 }
 
-export default async function EventDashboardPage({ params }: PageProps) {
-  const session = await auth.api.getSession({
-    headers: await headers(),
+function TicketTableSkeleton() {
+  return (
+    <div className="overflow-x-auto">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            {Array.from({ length: 10 }).map((_, index) => (
+              <TableHead key={index} className="py-3 pr-4 font-medium">
+                <div className="h-4 w-16 rounded bg-muted/70 animate-pulse" />
+              </TableHead>
+            ))}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {Array.from({ length: 6 }).map((_, rowIndex) => (
+            <TableRow key={rowIndex} className="border-b last:border-0">
+              {Array.from({ length: 10 }).map((_, colIndex) => (
+                <TableCell key={colIndex} className="py-3 pr-4">
+                  <div className="h-4 w-full max-w-28 rounded bg-muted/60 animate-pulse" />
+                </TableCell>
+              ))}
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
+
+export default function Page({ params }: { params: Promise<{ id: string }> }) {
+  const { id: slug } = use(params);
+
+  const [query, setQuery] = useState("");
+  const [page, setPage] = useState(0);
+  const [selected, setSelected] = useState<string[]>([]);
+
+  const {
+    data: tickets,
+    isFetching,
+    isPending,
+  } = useQuery({
+    queryKey: ["dashboard", slug, page, query],
+    placeholderData: keepPreviousData,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data } = await api.events.tickets({ slug }).get({
+        query: {
+          query,
+          offset: page * 10,
+          limit: 10,
+        },
+      });
+      return data;
+    },
   });
 
-  if (!session) {
-    redirect("/auth");
-  }
-
-  const { id } = await params;
-
-  const event = await prisma.event.findFirst({
-    where: {
-      id,
-      creatorId: session.user.id,
-    },
-    include: {
-      tickets: {
-        include: {
-          user: {
-            select: {
-              name: true,
-              email: true,
-            },
-          },
-        },
-        orderBy: {
-          createdAt: "desc",
-        },
-      },
-    },
-  });
-
-  if (!event) {
-    notFound();
-  }
-
-  const soldCount = event.tickets.reduce(
-    (acc, ticket) => acc + (ticket.valid ? ticket.qty : 0),
-    0,
-  );
-  const grossRevenue = event.tickets.reduce(
-    (acc, ticket) => acc + (ticket.valid ? ticket.qty * ticket.unitPrice : 0),
-    0,
-  );
-  const remaining = Math.max(event.totalTickets - soldCount, 0);
-  const soldPercent =
-    event.totalTickets > 0 ? (soldCount / event.totalTickets) * 100 : 0;
-  const avgTicketPrice = soldCount > 0 ? grossRevenue / soldCount : 0;
-  const invalidEntries = event.tickets.filter((ticket) => !ticket.valid).length;
+  if (tickets && !tickets.ok) return notFound();
 
   return (
     <div className="space-y-6">
       <section className="space-y-2">
-        <Link
-          href="/dashboard"
-          className="text-sm text-muted-foreground hover:text-foreground">
-          Back to dashboard
-        </Link>
         <div className="space-y-1">
-          <h1 className="text-2xl font-bold tracking-tight">{event.title}</h1>
+          <h1 className="text-2xl font-bold tracking-tight">
+            {tickets?.title}
+          </h1>
           <p className="text-sm text-muted-foreground">
-            {new Date(event.startDate).toLocaleDateString(undefined, {
+            {new Date(tickets?.startDate).toLocaleDateString(undefined, {
               month: "short",
               day: "numeric",
               year: "numeric",
             })}{" "}
-            at {event.location}
+            at {tickets?.location}
           </p>
         </div>
       </section>
@@ -113,16 +141,16 @@ export default async function EventDashboardPage({ params }: PageProps) {
         <Card>
           <CardHeader>
             <CardDescription>Total Sold</CardDescription>
-            <CardTitle>{soldCount}</CardTitle>
+            <CardTitle>{tickets?.totalCount}</CardTitle>
           </CardHeader>
           <CardPanel className="pt-0 text-sm text-muted-foreground">
-            of {event.totalTickets} tickets
+            of {tickets?.totalCount + tickets?.totalRemaining} tickets
           </CardPanel>
         </Card>
         <Card>
           <CardHeader>
             <CardDescription>Total Profit</CardDescription>
-            <CardTitle>{formatMoney(grossRevenue)}</CardTitle>
+            <CardTitle>{formatMoney(tickets?.grossRevenue!)}</CardTitle>
           </CardHeader>
           <CardPanel className="pt-0 text-sm text-muted-foreground">
             gross ticket revenue
@@ -131,92 +159,250 @@ export default async function EventDashboardPage({ params }: PageProps) {
         <Card>
           <CardHeader>
             <CardDescription>Remaining</CardDescription>
-            <CardTitle>{remaining}</CardTitle>
+            <CardTitle>{tickets?.remaining}</CardTitle>
           </CardHeader>
           <CardPanel className="pt-0 text-sm text-muted-foreground">
-            {soldPercent.toFixed(1)}% sold
+            {tickets?.soldPercentage.toFixed(1)}% sold
           </CardPanel>
         </Card>
         <Card>
           <CardHeader>
             <CardDescription>Average Ticket Price</CardDescription>
-            <CardTitle>{formatMoney(avgTicketPrice)}</CardTitle>
+            <CardTitle>{formatMoney(tickets?.avgTicketPrice)}</CardTitle>
           </CardHeader>
           <CardPanel className="pt-0 text-sm text-muted-foreground">
-            {event.tickets.length} records, {invalidEntries} invalid
+            {tickets?.totalCount} records, {tickets?.invalidEntries} invalid
           </CardPanel>
         </Card>
       </section>
 
-      <section>
-        <Card>
-          <CardHeader>
-            <CardTitle>Tickets</CardTitle>
-            <CardDescription>
-              Complete purchase records for this event.
-            </CardDescription>
-          </CardHeader>
-          <CardPanel>
-            {event.tickets.length === 0 ? (
+      <section className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
+        <div className="relative flex-1">
+          <Search className="absolute top-1/2 left-4 size-4 -translate-y-1/2 text-muted-foreground z-10" />
+          <Input
+            placeholder="Search events, venues, or vibes..."
+            className="pl-8 py-2 pr-8"
+            value={query}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setPage(0);
+            }}
+          />
+          {query.length > 0 ? (
+            <button
+              type="button"
+              onClick={() => setQuery("")}
+              className="absolute top-1/2 right-3 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            >
+              <X className="size-4" />
+            </button>
+          ) : null}
+        </div>
+      </section>
+
+      {isPending || (!tickets && isFetching) ? (
+        <TicketTableSkeleton />
+      ) : (
+        <div>
+          <section>
+            {tickets?.totalCount.length === 0 ? (
               <p className="text-sm text-muted-foreground">
                 No tickets sold yet.
               </p>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[760px] text-left text-sm">
-                  <thead className="border-b text-muted-foreground">
-                    <tr>
-                      <th className="py-3 pr-4 font-medium">Ticket</th>
-                      <th className="py-3 pr-4 font-medium">Buyer</th>
-                      <th className="py-3 pr-4 font-medium">Tier</th>
-                      <th className="py-3 pr-4 font-medium">Qty</th>
-                      <th className="py-3 pr-4 font-medium">Unit Price</th>
-                      <th className="py-3 pr-4 font-medium">Total</th>
-                      <th className="py-3 pr-4 font-medium">Status</th>
-                      <th className="py-3 pr-0 font-medium">Purchased</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {event.tickets.map((ticket) => {
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="py-3 pr-0 font-medium">
+                        <Checkbox
+                          checked={
+                            selected.length > 0 ? "indeterminate" : false
+                          }
+                          onClick={() => {
+                            setSelected([]);
+                          }}
+                          className="cursor-pointer"
+                        />
+                      </TableHead>
+                      <TableHead className="py-3 pr-4 font-medium">
+                        Ticket
+                      </TableHead>
+                      <TableHead className="py-3 pr-4 font-medium">
+                        Buyer
+                      </TableHead>
+                      <TableHead className="py-3 pr-4 font-medium">
+                        Tier
+                      </TableHead>
+                      <TableHead className="py-3 pr-4 font-medium">
+                        Qty
+                      </TableHead>
+                      <TableHead className="py-3 pr-4 font-medium">
+                        Unit Price
+                      </TableHead>
+                      <TableHead className="py-3 pr-4 font-medium">
+                        Total
+                      </TableHead>
+                      <TableHead className="py-3 pr-4 font-medium">
+                        Status
+                      </TableHead>
+                      <TableHead className="py-3 pr-0 font-medium">
+                        Purchased
+                      </TableHead>
+                      <TableHead className="py-3 pr-0">
+                        <Menu>
+                          <MenuTrigger
+                            render={
+                              <Button
+                                variant={"outline"}
+                                size="icon-sm"
+                                className={`${
+                                  selected.length == 0 &&
+                                  "opacity-60 pointer-events-none"
+                                }`}
+                              >
+                                <MoreVertical />
+                              </Button>
+                            }
+                          />
+                          <MenuPopup align="start" sideOffset={4}>
+                            <MenuItem>
+                              <Hammer />
+                              Invalid them all
+                            </MenuItem>
+                            <MenuItem>
+                              <CreditCard />
+                              Process Refund
+                            </MenuItem>
+                          </MenuPopup>
+                        </Menu>
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {tickets?.data?.map((ticket) => {
                       const buyer =
                         ticket.user?.name ??
                         ticket.user?.email ??
                         "Guest checkout";
 
                       return (
-                        <tr key={ticket.id} className="border-b last:border-0">
-                          <td className="py-3 pr-4 font-mono text-xs">
-                            {ticket.id.slice(0, 10)}...
-                          </td>
-                          <td className="py-3 pr-4">{buyer}</td>
-                          <td className="py-3 pr-4">{ticket.tierName}</td>
-                          <td className="py-3 pr-4">{ticket.qty}</td>
-                          <td className="py-3 pr-4">
+                        <TableRow
+                          key={ticket.id}
+                          className="border-b last:border-0"
+                        >
+                          <TableCell className="py-3 pr-2">
+                            <Checkbox
+                              checked={selected.includes(ticket.id)}
+                              onCheckedChange={(value) => {
+                                setSelected((prev) => {
+                                  if (value === true) {
+                                    if (prev.includes(ticket.id)) return prev;
+                                    return [...prev, ticket.id];
+                                  }
+
+                                  return prev.filter((id) => id !== ticket.id);
+                                });
+                              }}
+                            />
+                          </TableCell>
+                          <TableCell className="py-3 pr-4 font-mono text-xs hover:underline cursor-pointer">
+                            <Tooltip>
+                              <TooltipTrigger
+                                render={<p>{ticket.id.slice(0, 10)}...</p>}
+                              ></TooltipTrigger>
+                              <TooltipPopup>Copy</TooltipPopup>
+                            </Tooltip>
+                          </TableCell>
+                          <TableCell className="py-3 pr-4">{buyer}</TableCell>
+                          <TableCell className="py-3 pr-4">
+                            {ticket.tierName}
+                          </TableCell>
+                          <TableCell className="py-3 pr-4">
+                            {ticket.qty}
+                          </TableCell>
+                          <TableCell className="py-3 pr-4">
                             {formatMoney(ticket.unitPrice)}
-                          </td>
-                          <td className="py-3 pr-4">
+                          </TableCell>
+                          <TableCell className="py-3 pr-4">
                             {formatMoney(ticket.qty * ticket.unitPrice)}
-                          </td>
-                          <td className="py-3 pr-4">
+                          </TableCell>
+                          <TableCell className="py-3 pr-4">
                             <Badge
                               variant={ticket.valid ? "success" : "destructive"}
-                              size="sm">
+                              size="sm"
+                            >
                               {ticket.valid ? "Valid" : "Invalid"}
                             </Badge>
-                          </td>
-                          <td className="py-3 pr-0">
+                          </TableCell>
+                          <TableCell className="py-3 pr-0">
                             {formatDate(ticket.createdAt)}
-                          </td>
-                        </tr>
+                          </TableCell>
+                          <TableCell className="py-3 pr-0">
+                            <Menu>
+                              <MenuTrigger
+                                render={
+                                  <Button variant={"outline"} size="icon-sm">
+                                    <MoreVertical />
+                                  </Button>
+                                }
+                              />
+                              <MenuPopup align="start" sideOffset={4}>
+                                <MenuItem>
+                                  <Hammer />
+                                  {ticket.valid ? "Disble" : "Enable"}
+                                </MenuItem>
+                                <MenuItem>
+                                  <CreditCard />
+                                  Process Refund
+                                </MenuItem>
+                              </MenuPopup>
+                            </Menu>
+                          </TableCell>
+                        </TableRow>
                       );
                     })}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </div>
             )}
-          </CardPanel>
-        </Card>
-      </section>
+          </section>
+          <div className="h-fit w-full flex justify-between items-center my-2">
+            <p className="text-sm text-muted-foreground">
+              Total pages: {tickets?.totalPages}
+            </p>
+            <div>
+              <Pagination className="w-fit">
+                <PaginationContent>
+                  <PaginationItem>
+                    <PaginationPrevious
+                      className={`${!tickets?.previousPage && "opacity-60 pointer-events-none"}`}
+                      onClick={() => {
+                        if (tickets?.previousPage) {
+                          setPage(page - 1);
+                        }
+                      }}
+                    />
+                  </PaginationItem>
+                  <PaginationItem>
+                    <PaginationLink>{page + 1}</PaginationLink>
+                  </PaginationItem>
+                  <PaginationItem>
+                    <PaginationNext
+                      className={`${!tickets?.nextPage && "opacity-60 pointer-events-none"}`}
+                      onClick={() => {
+                        if (tickets?.nextPage) {
+                          setPage(page + 1);
+                        }
+                      }}
+                    />
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

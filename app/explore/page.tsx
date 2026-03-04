@@ -96,46 +96,48 @@ export default function ExplorePage() {
         </div>
       </div>
 
-      <div className="h-fit w-full flex justify-center items-center my-2 border">
-        <p className="text-sm text-muted-foreground border">
+      <div className="h-fit w-full flex justify-between items-center my-2">
+        <p className="text-sm text-muted-foreground">
           Total pages: {events?.totalPages}
         </p>
-        <Pagination className="border w-fit">
-          <PaginationContent>
-            <PaginationItem>
-              <PaginationPrevious
-                className={`${!events?.previousPage && "opacity-60 pointer-events-none"}`}
-                onClick={() => {
-                  if (events?.previousPage) {
-                    setPage(page - 1);
-                    refetch();
-                  }
-                }}
-              />
-            </PaginationItem>
-            <PaginationItem>
-              <PaginationLink>{page + 1}</PaginationLink>
-            </PaginationItem>
-            <PaginationItem>
-              <PaginationNext
-                className={`${!events?.nextPage && "opacity-60 pointer-events-none"}`}
-                onClick={() => {
-                  if (events?.nextPage) {
-                    setPage(page + 1);
-                    refetch();
-                  }
-                }}
-              />
-            </PaginationItem>
-          </PaginationContent>
-        </Pagination>
+        <div>
+          <Pagination className="w-fit">
+            <PaginationContent>
+              <PaginationItem>
+                <PaginationPrevious
+                  className={`${!events?.previousPage && "opacity-60 pointer-events-none"}`}
+                  onClick={() => {
+                    if (events?.previousPage) {
+                      setPage(page - 1);
+                      refetch();
+                    }
+                  }}
+                />
+              </PaginationItem>
+              <PaginationItem>
+                <PaginationLink>{page + 1}</PaginationLink>
+              </PaginationItem>
+              <PaginationItem>
+                <PaginationNext
+                  className={`${!events?.nextPage && "opacity-60 pointer-events-none"}`}
+                  onClick={() => {
+                    if (events?.nextPage) {
+                      setPage(page + 1);
+                      refetch();
+                    }
+                  }}
+                />
+              </PaginationItem>
+            </PaginationContent>
+          </Pagination>
+        </div>
       </div>
 
       {isFetching && <LoadingGrid />}
       {!isFetching && events && (
         <div className="grid grid-cols-1 gap-3 space-y-4 sm:grid-cols-3 lg:grid-cols-3">
           {events.data.map((event) => (
-            <EventCard key={event.id} event={event} />
+            <EventCard key={event.slug} event={event} />
           ))}
         </div>
       )}
@@ -157,7 +159,7 @@ function LoadingGrid() {
   );
 }
 
-function EventCard({ event }: { event: ExploreEvent }) {
+function EventCard({ event }: { event: any }) {
   const dateText = formatShortDate(event.startDate);
 
   return (
