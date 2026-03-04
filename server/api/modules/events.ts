@@ -1,5 +1,6 @@
 import { Elysia, t } from "elysia";
 import { prisma } from "@/lib/prisma";
+import { auth } from "@/lib/auth";
 
 type TicketSortField = "qty" | "totalPrice" | "purchased" | "status" | "tier";
 type TicketSortOrder = "asc" | "desc" | "dsc";
@@ -35,6 +36,14 @@ function totalSeatsFromPrices(prices: unknown) {
   }, 0);
 }
 
+const tierSchema = t.Object({
+  id: t.Optional(t.String()),
+  name: t.String(),
+  price: t.Number(),
+  seats: t.Optional(t.Number()),
+  note: t.Optional(t.String()),
+});
+
 const eventCreateSchema = t.Object({
   title: t.String(),
   tagline: t.Optional(t.String()),
@@ -44,39 +53,53 @@ const eventCreateSchema = t.Object({
   endDate: t.Optional(t.String()),
   location: t.String(),
   city: t.Optional(t.String()),
-  contactEmail: t.Optional(t.String({ format: "email" })),
+  contactEmail: t.Optional(t.String()),
   posterImage: t.Optional(t.String()),
-  creatorId: t.String(),
   status: t.Optional(
     t.Union([t.Literal("DRAFT"), t.Literal("LIVE"), t.Literal("STOPPED")]),
   ),
-  prices: t.Array(
-    t.Object({
-      name: t.String(),
-      price: t.Number(),
-      seats: t.Optional(t.Number()),
-    }),
-  ),
+  prices: t.Array(tierSchema),
   totalTickets: t.Optional(t.Number()),
   genre: t.Optional(t.Array(t.String())),
 });
 
-const eventUpdateSchema = t.Partial(eventCreateSchema);
+const eventUpdateSchema = t.Object({
+  title: t.Optional(t.String()),
+  tagline: t.Optional(t.String()),
+  description: t.Optional(t.String()),
+  slug: t.Optional(t.String()),
+  startDate: t.Optional(t.String()),
+  endDate: t.Optional(t.String()),
+  location: t.Optional(t.String()),
+  city: t.Optional(t.String()),
+  contactEmail: t.Optional(t.String()),
+  posterImage: t.Optional(t.String()),
+  status: t.Optional(
+    t.Union([t.Literal("DRAFT"), t.Literal("LIVE"), t.Literal("STOPPED")]),
+  ),
+  prices: t.Optional(t.Array(tierSchema)),
+  totalTickets: t.Optional(t.Number()),
+  genre: t.Optional(t.Array(t.String())),
+});
 
 export const eventsRoutes = new Elysia({ prefix: "/events" })
   .get(
     "/",
     async ({ query }) => {
+      const where = {
+        title: query.query
+          ? { contains: query.query, mode: "insensitive" as const }
+          : undefined,
+        status: "LIVE" as const,
+      };
+
+      const totalCount = await prisma.event.count({ where });
+
       const data = await prisma.event.findMany({
         orderBy: { startDate: "asc" },
         take: query.limit,
         skip: query.offset,
-        where: {
-          title: query.query
-            ? { contains: query.query, mode: "insensitive" }
-            : undefined,
-          status: "LIVE",
-        },
+        where,
         select: {
           title: true,
           slug: true,
@@ -86,11 +109,12 @@ export const eventsRoutes = new Elysia({ prefix: "/events" })
           genre: true,
         },
       });
+
       return {
-        totalPages: Math.ceil((await prisma.event.count()) / query.limit),
+        totalPages: Math.ceil(totalCount / query.limit),
         limit: query.limit,
         pageOffset: query.offset,
-        nextPage: query.offset + query.limit < (await prisma.event.count()),
+        nextPage: query.offset + query.limit < totalCount,
         previousPage: query.offset > 0,
         data,
       };
@@ -105,52 +129,193 @@ export const eventsRoutes = new Elysia({ prefix: "/events" })
   )
   .post(
     "/",
-    async ({ body }) => {
-      if (body.endDate && new Date(body.startDate) >= new Date(body.endDate)) {
+    async ({ body, request, set }) => {
+      const session = await auth.api.getSession({ headers: request.headers });
+      if (!session?.user) {
+        set.status = 401;
+        return { ok: false, message: "Unauthorized" };
+      }
+
+      // Validate slug format
+      const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+      if (!slugPattern.test(body.slug) || body.slug.length < 3) {
+        set.status = 400;
+        return { ok: false, message: "Invalid slug format" };
+      }
+
+      // Check slug uniqueness
+      const existing = await prisma.event.findUnique({
+        where: { slug: body.slug },
+        select: { id: true },
+      });
+
+      if (existing) {
+        set.status = 409;
         return { ok: false, message: "Slug already exists" };
+      }
+
+      // Validate dates
+      const startDate = new Date(body.startDate);
+      if (isNaN(startDate.getTime())) {
+        set.status = 400;
+        return { ok: false, message: "Invalid start date" };
+      }
+
+      let endDate: Date | null = null;
+      if (body.endDate) {
+        endDate = new Date(body.endDate);
+        if (isNaN(endDate.getTime())) {
+          set.status = 400;
+          return { ok: false, message: "Invalid end date" };
+        }
+        if (startDate >= endDate) {
+          set.status = 400;
+          return { ok: false, message: "End date must be after start date" };
+        }
+      }
+
+      // Validate at least one tier
+      if (body.prices.length === 0) {
+        set.status = 400;
+        return { ok: false, message: "At least one price tier is required" };
       }
 
       const totalTickets =
         body.totalTickets ?? totalSeatsFromPrices(body.prices);
 
-      const event = await prisma.event.create({
-        data: {
-          title: body.title,
-          tagline: body.tagline ?? null,
-          description: body.description,
-          slug: body.slug,
-          startDate: body.slug,
-          endDate: body.endDate ?? body.startDate,
-          location: body.location,
-          city: body.city ?? null,
-          contactEmail: body.contactEmail ?? null,
-          posterImage: body.posterImage ?? null,
-          creatorId: body.creatorId ?? null,
-          status: body.status ?? "DRAFT",
-          prices: body.prices ?? undefined,
-          totalTickets,
-          genre: body.genre ?? [],
-        },
-      });
+      try {
+        const event = await prisma.event.create({
+          data: {
+            title: body.title,
+            tagline: body.tagline ?? null,
+            description: body.description,
+            slug: body.slug,
+            startDate,
+            endDate: endDate ?? startDate,
+            location: body.location,
+            city: body.city ?? null,
+            contactEmail: body.contactEmail ?? null,
+            posterImage: body.posterImage ?? null,
+            creatorId: session.user.id,
+            status: body.status ?? "DRAFT",
+            prices: body.prices,
+            totalTickets,
+            genre: body.genre ?? [],
+          },
+        });
 
-      return event;
+        return event;
+      } catch (error: unknown) {
+        if (
+          typeof error === "object" &&
+          error !== null &&
+          "code" in error &&
+          (error as { code?: string }).code === "P2002"
+        ) {
+          set.status = 409;
+          return { ok: false, message: "Slug already exists" };
+        }
+        console.error("[events] Failed to create event:", error);
+        set.status = 500;
+        return { ok: false, message: "Failed to create event" };
+      }
     },
     {
       body: eventCreateSchema,
     },
   )
   .put(
-    // has to work
     "/:id",
-    async ({ params, body }) => {
-      const data = await prisma.event.update({
+    async ({ params, body, request, set }) => {
+      const session = await auth.api.getSession({ headers: request.headers });
+      if (!session?.user) {
+        set.status = 401;
+        return { ok: false, message: "Unauthorized" };
+      }
+
+      const event = await prisma.event.findUnique({
         where: { id: params.id },
-        data: body,
+        select: { creatorId: true },
       });
-      if (data == null) {
-        return { ok: true };
-      } else {
-        return { ok: false, message: "Update failed" };
+
+      if (!event) {
+        set.status = 404;
+        return { ok: false, message: "Event not found" };
+      }
+
+      if (event.creatorId !== session.user.id) {
+        set.status = 403;
+        return { ok: false, message: "Only the event creator can update this event" };
+      }
+
+      // Build update data, only including provided fields
+      const updateData: Record<string, unknown> = {};
+
+      if (body.title !== undefined) updateData.title = body.title;
+      if (body.tagline !== undefined) updateData.tagline = body.tagline;
+      if (body.description !== undefined) updateData.description = body.description;
+      if (body.location !== undefined) updateData.location = body.location;
+      if (body.city !== undefined) updateData.city = body.city;
+      if (body.contactEmail !== undefined) updateData.contactEmail = body.contactEmail;
+      if (body.posterImage !== undefined) updateData.posterImage = body.posterImage;
+      if (body.status !== undefined) updateData.status = body.status;
+      if (body.genre !== undefined) updateData.genre = body.genre;
+
+      if (body.startDate !== undefined) {
+        const d = new Date(body.startDate);
+        if (isNaN(d.getTime())) {
+          set.status = 400;
+          return { ok: false, message: "Invalid start date" };
+        }
+        updateData.startDate = d;
+      }
+
+      if (body.endDate !== undefined) {
+        const d = new Date(body.endDate);
+        if (isNaN(d.getTime())) {
+          set.status = 400;
+          return { ok: false, message: "Invalid end date" };
+        }
+        updateData.endDate = d;
+      }
+
+      if (body.slug !== undefined) {
+        const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+        if (!slugPattern.test(body.slug) || body.slug.length < 3) {
+          set.status = 400;
+          return { ok: false, message: "Invalid slug format" };
+        }
+        updateData.slug = body.slug;
+      }
+
+      if (body.prices !== undefined) {
+        updateData.prices = body.prices;
+        updateData.totalTickets =
+          body.totalTickets ?? totalSeatsFromPrices(body.prices);
+      } else if (body.totalTickets !== undefined) {
+        updateData.totalTickets = body.totalTickets;
+      }
+
+      try {
+        const updated = await prisma.event.update({
+          where: { id: params.id },
+          data: updateData,
+        });
+
+        return { ok: true, data: updated };
+      } catch (error: unknown) {
+        if (
+          typeof error === "object" &&
+          error !== null &&
+          "code" in error &&
+          (error as { code?: string }).code === "P2002"
+        ) {
+          set.status = 409;
+          return { ok: false, message: "Slug already exists" };
+        }
+        console.error("[events] Failed to update event:", error);
+        set.status = 500;
+        return { ok: false, message: "Failed to update event" };
       }
     },
     {
@@ -182,11 +347,9 @@ export const eventsRoutes = new Elysia({ prefix: "/events" })
     async ({ params }) => {
       const event = await prisma.event.findUnique({
         where: { slug: params.slug },
+        select: { id: true },
       });
-      if (!event) {
-        return { exists: false };
-      }
-      return { exists: true };
+      return { exists: !!event };
     },
     {
       params: t.Object({ slug: t.String() }),
@@ -194,7 +357,13 @@ export const eventsRoutes = new Elysia({ prefix: "/events" })
   )
   .get(
     "/tickets/:slug",
-    async ({ params, query }) => {
+    async ({ params, query, request, set }) => {
+      const session = await auth.api.getSession({ headers: request.headers });
+      if (!session?.user) {
+        set.status = 401;
+        return { ok: false };
+      }
+
       const event = await prisma.event.findUnique({
         where: { slug: params.slug },
         select: {
@@ -205,9 +374,19 @@ export const eventsRoutes = new Elysia({ prefix: "/events" })
           startDate: true,
           endDate: true,
           location: true,
+          creatorId: true,
         },
       });
-      if (!event) return { ok: false };
+
+      if (!event) {
+        set.status = 404;
+        return { ok: false };
+      }
+
+      if (event.creatorId !== session.user.id) {
+        set.status = 403;
+        return { ok: false };
+      }
 
       const where = query.query
         ? {

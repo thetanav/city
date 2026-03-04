@@ -4,14 +4,13 @@ import * as React from "react";
 import {
   Check,
   Image as ImageIcon,
-  Link2,
   Loader,
   Plus,
   Trash2,
   X,
 } from "lucide-react";
-import type { Treaty } from "@elysiajs/eden";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -35,6 +34,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { toastManager } from "@/components/ui/toast";
 
 type Tier = {
   id: string;
@@ -44,17 +44,14 @@ type Tier = {
   note: string;
 };
 
-type EdenEventItem = NonNullable<Treaty.Data<typeof api.events.get>>[number];
-type EventStatus = NonNullable<EdenEventItem["status"]>;
-type CreateEventResponse = NonNullable<
-  Exclude<Treaty.Data<typeof api.events.post>, { message: string }>
->;
+type EventStatus = "DRAFT" | "LIVE" | "STOPPED";
 
 function slugify(raw: string) {
   return raw
     .toLowerCase()
     .trim()
     .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
     .slice(0, 64);
 }
 
@@ -66,7 +63,21 @@ function uid() {
   return Math.random().toString(16).slice(2) + Date.now().toString(16);
 }
 
+function apiErrorMessage(value: unknown, fallback: string): string {
+  if (
+    typeof value === "object" &&
+    value !== null &&
+    "message" in value &&
+    typeof (value as { message?: unknown }).message === "string"
+  ) {
+    return (value as { message: string }).message;
+  }
+  return fallback;
+}
+
 export default function EventCreator() {
+  const router = useRouter();
+
   const [title, setTitle] = React.useState("");
   const [tagline, setTagline] = React.useState("");
   const [description, setDescription] = React.useState("");
@@ -98,21 +109,17 @@ export default function EventCreator() {
     },
   ]);
 
-  const {
-    data: slugUsed,
-    isLoading,
-    refetch,
-  } = useQuery({
-    queryKey: ["slug", slug],
+  const slugQuery = useQuery({
+    queryKey: ["slug-check", slug],
     queryFn: async () => {
-      const data = await api.events
-        .check({
-          slug,
-        })
-        .get();
+      if (!slug || !isValidSlug(slug)) return null;
+      const { data } = await api.events.check({ slug }).get();
       return data;
     },
+    enabled: slug.length >= 3 && isValidSlug(slug),
   });
+
+  const slugExists = slugQuery.data?.exists === true;
 
   React.useEffect(() => {
     if (slugTouched) return;
@@ -160,14 +167,13 @@ export default function EventCreator() {
 
       const { data, error } = await api.events.post({
         title,
-        tagline,
+        tagline: tagline || undefined,
         description: normalizedDescription,
         slug,
         startDate: startAt,
         endDate: hasEndDate && endAt ? endAt : undefined,
         location,
-        city: "",
-        creatorId: "placeholder-user-id",
+        city: undefined,
         contactEmail: contactEmail.trim() || undefined,
         posterImage: coverUrl.trim() || undefined,
         status,
@@ -180,23 +186,55 @@ export default function EventCreator() {
         throw new Error(apiErrorMessage(error.value, "Failed to create event"));
       }
 
-      if (!data) {
-        throw new Error("Failed to create event");
+      if (!data || ("ok" in data && data.ok === false)) {
+        const msg =
+          data && "message" in data && typeof data.message === "string"
+            ? data.message
+            : "Failed to create event";
+        throw new Error(msg);
       }
 
-      return data as CreateEventResponse;
+      return data;
     },
   });
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+
+    if (!title.trim()) {
+      toastManager.add({ data: "Title is required" });
+      return;
+    }
+    if (!slug || !slugOk) {
+      toastManager.add({ data: "Please enter a valid slug" });
+      return;
+    }
+    if (slugExists) {
+      toastManager.add({ data: "This slug is already taken" });
+      return;
+    }
+    if (!startAt) {
+      toastManager.add({ data: "Start date is required" });
+      return;
+    }
+    if (!location.trim()) {
+      toastManager.add({ data: "Location is required" });
+      return;
+    }
+    if (tiers.length === 0) {
+      toastManager.add({ data: "At least one price tier is required" });
+      return;
+    }
+
     try {
       const created = await createEventMutation.mutateAsync();
-      window.location.href = `/e/${created.slug}`;
+      if ("slug" in created) {
+        router.push(`/e/${created.slug}`);
+      }
     } catch (error: unknown) {
       const message =
         error instanceof Error ? error.message : "Failed to create event";
-      alert(message);
+      toastManager.add({ data: message });
     }
   }
 
@@ -205,6 +243,16 @@ export default function EventCreator() {
     { label: "Available for buyers", value: "LIVE" },
     { label: "Stopped for buyers", value: "STOPPED" },
   ];
+
+  const canSubmit =
+    title.trim().length > 0 &&
+    slug.length > 0 &&
+    slugOk &&
+    !slugExists &&
+    startAt.length > 0 &&
+    location.trim().length > 0 &&
+    tiers.length > 0 &&
+    !createEventMutation.isPending;
 
   return (
     <div>
@@ -234,7 +282,7 @@ export default function EventCreator() {
                     defaultValue="DRAFT"
                     items={statusList}
                     onValueChange={(value) => {
-                      setStatus(value);
+                      setStatus(value as EventStatus);
                     }}
                   >
                     <SelectTrigger>
@@ -258,6 +306,7 @@ export default function EventCreator() {
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="Night Market Sessions"
                   autoComplete="off"
+                  required
                 />
               </div>
 
@@ -294,6 +343,7 @@ export default function EventCreator() {
                     type="datetime-local"
                     value={startAt}
                     onChange={(e) => setStartAt(e.target.value)}
+                    required
                   />
                 </div>
                 <div className="grid gap-2">
@@ -327,6 +377,7 @@ export default function EventCreator() {
                   onChange={(e) => setLocation(e.target.value)}
                   placeholder="Warehouse 11, Downtown"
                   autoComplete="off"
+                  required
                 />
               </div>
 
@@ -363,7 +414,7 @@ export default function EventCreator() {
                   value={slug}
                   onChange={(e) => {
                     setSlug(slugify(e.target.value));
-                    refetch();
+                    setSlugTouched(true);
                   }}
                   className={cn(
                     "px-11 py-1 font-mono",
@@ -373,26 +424,26 @@ export default function EventCreator() {
                   autoComplete="off"
                 />
                 <div className="pointer-events-none absolute right-5 top-1/2 -translate-y-1/2 select-none text-xs text-muted-foreground z-10">
-                  {isLoading ? (
+                  {slugQuery.isLoading ? (
                     <Loader className="size-4 animate-spin" />
-                  ) : slugUsed && slugUsed.exists ? (
-                    <X className="size-4" />
-                  ) : (
-                    <Check className="size-4" />
-                  )}
+                  ) : slugExists ? (
+                    <X className="size-4 text-destructive" />
+                  ) : slug && slugOk ? (
+                    <Check className="size-4 text-emerald-600" />
+                  ) : null}
                 </div>
               </div>
               <ul className="list-disc ml-4">
-                {!slugOk && (
+                {!slugOk && slug.length > 0 && (
                   <li className="text-xs text-destructive">
                     Slug must be at least 3 characters and only use a-z, 0-9,
                     and hyphens.
                   </li>
                 )}
-                {slugUsed && slugUsed.exists && (
+                {slugExists && (
                   <li className="text-xs text-destructive">
-                    This slug is used by other event on this platform use any
-                    other slug.
+                    This slug is already used by another event. Pick a different
+                    one.
                   </li>
                 )}
               </ul>
@@ -557,13 +608,7 @@ export default function EventCreator() {
               <Button
                 type="submit"
                 className="w-full sm:w-auto"
-                disabled={
-                  !title ||
-                  !slug ||
-                  !slugOk ||
-                  tiers.length === 0 ||
-                  createEventMutation.isPending
-                }
+                disabled={!canSubmit}
               >
                 {createEventMutation.isPending ? "Creating..." : "Create event"}
               </Button>
