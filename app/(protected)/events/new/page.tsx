@@ -154,18 +154,16 @@ export default function EventCreator() {
     setTiers((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)));
   }
 
-  const createEventMutation = useMutation({
+  const { mutate, isPending } = useMutation({
     mutationFn: async () => {
       const normalizedDescription = description.replace(/\r\n/g, "\n");
       const prices = tiers.map((tier) => ({
-        id: tier.id,
         name: tier.name || "General",
         price: Number(tier.price) || 0,
         seats: Number(tier.seats) || 0,
-        note: tier.note || undefined,
       }));
 
-      const { data, error } = await api.events.post({
+      const { data } = await api.events.post({
         title,
         tagline: tagline || undefined,
         description: normalizedDescription,
@@ -182,61 +180,19 @@ export default function EventCreator() {
         genre: [],
       });
 
-      if (error) {
-        throw new Error(apiErrorMessage(error.value, "Failed to create event"));
+      if (data) {
+        toastManager.add({
+          title: data.message,
+          type: data.ok ? "success" : "error",
+        });
       }
-
-      if (!data || ("ok" in data && data.ok === false)) {
-        const msg =
-          data && "message" in data && typeof data.message === "string"
-            ? data.message
-            : "Failed to create event";
-        throw new Error(msg);
+      if (data?.ok) {
+        router.push(`/e/${(data.data as { slug?: string })?.slug}`);
       }
 
       return data;
     },
   });
-
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-
-    if (!title.trim()) {
-      toastManager.add({ data: "Title is required" });
-      return;
-    }
-    if (!slug || !slugOk) {
-      toastManager.add({ data: "Please enter a valid slug" });
-      return;
-    }
-    if (slugExists) {
-      toastManager.add({ data: "This slug is already taken" });
-      return;
-    }
-    if (!startAt) {
-      toastManager.add({ data: "Start date is required" });
-      return;
-    }
-    if (!location.trim()) {
-      toastManager.add({ data: "Location is required" });
-      return;
-    }
-    if (tiers.length === 0) {
-      toastManager.add({ data: "At least one price tier is required" });
-      return;
-    }
-
-    try {
-      const created = await createEventMutation.mutateAsync();
-      if ("slug" in created) {
-        router.push(`/e/${created.slug}`);
-      }
-    } catch (error: unknown) {
-      const message =
-        error instanceof Error ? error.message : "Failed to create event";
-      toastManager.add({ data: message });
-    }
-  }
 
   const statusList = [
     { label: "Not listed", value: "DRAFT" },
@@ -252,7 +208,7 @@ export default function EventCreator() {
     startAt.length > 0 &&
     location.trim().length > 0 &&
     tiers.length > 0 &&
-    !createEventMutation.isPending;
+    !isPending;
 
   return (
     <div>
@@ -263,7 +219,7 @@ export default function EventCreator() {
       </div>
 
       <form
-        onSubmit={onSubmit}
+        onSubmit={(e) => e.preventDefault()}
         className="grid gap-6 lg:grid-cols-[1.25fr_.85fr]"
       >
         <div className="grid gap-6">
@@ -608,9 +564,10 @@ export default function EventCreator() {
               <Button
                 type="submit"
                 className="w-full sm:w-auto"
-                disabled={!canSubmit}
+                // disabled={!canSubmit}
+                onClick={() => mutate()}
               >
-                {createEventMutation.isPending ? "Creating..." : "Create event"}
+                {isPending ? "Creating..." : "Create event"}
               </Button>
             </CardFooter>
           </Card>

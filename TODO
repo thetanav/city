@@ -1,4 +1,3 @@
 - qr scanner for organizers
 - fix webhooks it is fucked up
-- use zustand
 - parse types of requests with zod of treaty

@@ -1,6 +1,7 @@
 import { Elysia, t } from "elysia";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
+import { rateLimit } from "elysia-rate-limit";
 
 type TicketSortField = "qty" | "totalPrice" | "purchased" | "status" | "tier";
 type TicketSortOrder = "asc" | "desc" | "dsc";
@@ -9,8 +10,7 @@ function resolveTicketOrderBy(
   filter: { field: TicketSortField; order: TicketSortOrder } | undefined,
 ) {
   const field = filter?.field ?? "purchased";
-  const direction: "asc" | "desc" =
-    filter?.order === "asc" ? "asc" : "desc";
+  const direction: "asc" | "desc" = filter?.order === "asc" ? "asc" : "desc";
 
   switch (field) {
     case "qty":
@@ -83,63 +83,17 @@ const eventUpdateSchema = t.Object({
 });
 
 export const eventsRoutes = new Elysia({ prefix: "/events" })
-  .get(
-    "/",
-    async ({ query }) => {
-      const where = {
-        title: query.query
-          ? { contains: query.query, mode: "insensitive" as const }
-          : undefined,
-        status: "LIVE" as const,
-      };
-
-      const totalCount = await prisma.event.count({ where });
-
-      const data = await prisma.event.findMany({
-        orderBy: { startDate: "asc" },
-        take: query.limit,
-        skip: query.offset,
-        where,
-        select: {
-          title: true,
-          slug: true,
-          startDate: true,
-          location: true,
-          posterImage: true,
-          genre: true,
-        },
-      });
-
-      return {
-        totalPages: Math.ceil(totalCount / query.limit),
-        limit: query.limit,
-        pageOffset: query.offset,
-        nextPage: query.offset + query.limit < totalCount,
-        previousPage: query.offset > 0,
-        data,
-      };
-    },
-    {
-      query: t.Object({
-        offset: t.Number(),
-        limit: t.Number(),
-        query: t.String(),
-      }),
-    },
-  )
   .post(
     "/",
-    async ({ body, request, set }) => {
+    async ({ body, request }) => {
       const session = await auth.api.getSession({ headers: request.headers });
       if (!session?.user) {
-        set.status = 401;
         return { ok: false, message: "Unauthorized" };
       }
 
       // Validate slug format
       const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
       if (!slugPattern.test(body.slug) || body.slug.length < 3) {
-        set.status = 400;
         return { ok: false, message: "Invalid slug format" };
       }
 
@@ -150,14 +104,12 @@ export const eventsRoutes = new Elysia({ prefix: "/events" })
       });
 
       if (existing) {
-        set.status = 409;
         return { ok: false, message: "Slug already exists" };
       }
 
       // Validate dates
       const startDate = new Date(body.startDate);
       if (isNaN(startDate.getTime())) {
-        set.status = 400;
         return { ok: false, message: "Invalid start date" };
       }
 
@@ -165,18 +117,15 @@ export const eventsRoutes = new Elysia({ prefix: "/events" })
       if (body.endDate) {
         endDate = new Date(body.endDate);
         if (isNaN(endDate.getTime())) {
-          set.status = 400;
           return { ok: false, message: "Invalid end date" };
         }
         if (startDate >= endDate) {
-          set.status = 400;
           return { ok: false, message: "End date must be after start date" };
         }
       }
 
       // Validate at least one tier
       if (body.prices.length === 0) {
-        set.status = 400;
         return { ok: false, message: "At least one price tier is required" };
       }
 
@@ -204,7 +153,7 @@ export const eventsRoutes = new Elysia({ prefix: "/events" })
           },
         });
 
-        return event;
+        return { ok: true, data: event };
       } catch (error: unknown) {
         if (
           typeof error === "object" &&
@@ -212,11 +161,9 @@ export const eventsRoutes = new Elysia({ prefix: "/events" })
           "code" in error &&
           (error as { code?: string }).code === "P2002"
         ) {
-          set.status = 409;
           return { ok: false, message: "Slug already exists" };
         }
         console.error("[events] Failed to create event:", error);
-        set.status = 500;
         return { ok: false, message: "Failed to create event" };
       }
     },
@@ -226,11 +173,10 @@ export const eventsRoutes = new Elysia({ prefix: "/events" })
   )
   .put(
     "/:id",
-    async ({ params, body, request, set }) => {
+    async ({ params, body, request }) => {
       const session = await auth.api.getSession({ headers: request.headers });
       if (!session?.user) {
-        set.status = 401;
-        return { ok: false, message: "Unauthorized" };
+        return { ok: false, message: "Unauthorized!" };
       }
 
       const event = await prisma.event.findUnique({
@@ -239,13 +185,14 @@ export const eventsRoutes = new Elysia({ prefix: "/events" })
       });
 
       if (!event) {
-        set.status = 404;
-        return { ok: false, message: "Event not found" };
+        return { ok: false, message: "Event not found!" };
       }
 
       if (event.creatorId !== session.user.id) {
-        set.status = 403;
-        return { ok: false, message: "Only the event creator can update this event" };
+        return {
+          ok: false,
+          message: "Sign in from correct email!",
+        };
       }
 
       // Build update data, only including provided fields
@@ -253,18 +200,20 @@ export const eventsRoutes = new Elysia({ prefix: "/events" })
 
       if (body.title !== undefined) updateData.title = body.title;
       if (body.tagline !== undefined) updateData.tagline = body.tagline;
-      if (body.description !== undefined) updateData.description = body.description;
+      if (body.description !== undefined)
+        updateData.description = body.description;
       if (body.location !== undefined) updateData.location = body.location;
       if (body.city !== undefined) updateData.city = body.city;
-      if (body.contactEmail !== undefined) updateData.contactEmail = body.contactEmail;
-      if (body.posterImage !== undefined) updateData.posterImage = body.posterImage;
+      if (body.contactEmail !== undefined)
+        updateData.contactEmail = body.contactEmail;
+      if (body.posterImage !== undefined)
+        updateData.posterImage = body.posterImage;
       if (body.status !== undefined) updateData.status = body.status;
       if (body.genre !== undefined) updateData.genre = body.genre;
 
       if (body.startDate !== undefined) {
         const d = new Date(body.startDate);
         if (isNaN(d.getTime())) {
-          set.status = 400;
           return { ok: false, message: "Invalid start date" };
         }
         updateData.startDate = d;
@@ -273,7 +222,6 @@ export const eventsRoutes = new Elysia({ prefix: "/events" })
       if (body.endDate !== undefined) {
         const d = new Date(body.endDate);
         if (isNaN(d.getTime())) {
-          set.status = 400;
           return { ok: false, message: "Invalid end date" };
         }
         updateData.endDate = d;
@@ -282,7 +230,6 @@ export const eventsRoutes = new Elysia({ prefix: "/events" })
       if (body.slug !== undefined) {
         const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
         if (!slugPattern.test(body.slug) || body.slug.length < 3) {
-          set.status = 400;
           return { ok: false, message: "Invalid slug format" };
         }
         updateData.slug = body.slug;
@@ -310,11 +257,9 @@ export const eventsRoutes = new Elysia({ prefix: "/events" })
           "code" in error &&
           (error as { code?: string }).code === "P2002"
         ) {
-          set.status = 409;
           return { ok: false, message: "Slug already exists" };
         }
         console.error("[events] Failed to update event:", error);
-        set.status = 500;
         return { ok: false, message: "Failed to update event" };
       }
     },
@@ -331,7 +276,7 @@ export const eventsRoutes = new Elysia({ prefix: "/events" })
       });
 
       if (!event) {
-        return { ok: false, data: null };
+        return { ok: false, message: "Event not exist!" };
       }
       return {
         ok: true,
@@ -349,7 +294,7 @@ export const eventsRoutes = new Elysia({ prefix: "/events" })
         where: { slug: params.slug },
         select: { id: true },
       });
-      return { exists: !!event };
+      return { ok: true, exists: !!event };
     },
     {
       params: t.Object({ slug: t.String() }),
@@ -360,8 +305,7 @@ export const eventsRoutes = new Elysia({ prefix: "/events" })
     async ({ params, query, request, set }) => {
       const session = await auth.api.getSession({ headers: request.headers });
       if (!session?.user) {
-        set.status = 401;
-        return { ok: false };
+        return { ok: false, message: "Unauthorised!" };
       }
 
       const event = await prisma.event.findUnique({
@@ -379,13 +323,11 @@ export const eventsRoutes = new Elysia({ prefix: "/events" })
       });
 
       if (!event) {
-        set.status = 404;
-        return { ok: false };
+        return { ok: false, message: "Event not exist!" };
       }
 
       if (event.creatorId !== session.user.id) {
-        set.status = 403;
-        return { ok: false };
+        return { ok: false, message: "Sign in from correct email!" };
       }
 
       const where = query.query
@@ -473,9 +415,58 @@ export const eventsRoutes = new Elysia({ prefix: "/events" })
             t.Literal("status"),
             t.Literal("tier"),
           ]),
-          order: t.Union([t.Literal("asc"), t.Literal("desc"), t.Literal("dsc")]),
+          order: t.Union([
+            t.Literal("asc"),
+            t.Literal("desc"),
+            t.Literal("dsc"),
+          ]),
         }),
       }),
       params: t.Object({ slug: t.String() }),
+    },
+  )
+  .use(rateLimit())
+  .get(
+    "/",
+    async ({ query }) => {
+      const where = {
+        title: query.query
+          ? { contains: query.query, mode: "insensitive" as const }
+          : undefined,
+        status: "LIVE" as const,
+      };
+
+      const totalCount = await prisma.event.count({ where });
+
+      const data = await prisma.event.findMany({
+        orderBy: { startDate: "asc" },
+        take: query.limit,
+        skip: query.offset,
+        where,
+        select: {
+          title: true,
+          slug: true,
+          startDate: true,
+          location: true,
+          posterImage: true,
+          genre: true,
+        },
+      });
+
+      return {
+        totalPages: Math.ceil(totalCount / query.limit),
+        limit: query.limit,
+        pageOffset: query.offset,
+        nextPage: query.offset + query.limit < totalCount,
+        previousPage: query.offset > 0,
+        data,
+      };
+    },
+    {
+      query: t.Object({
+        offset: t.Number(),
+        limit: t.Number(),
+        query: t.String(),
+      }),
     },
   );

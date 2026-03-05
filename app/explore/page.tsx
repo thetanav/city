@@ -45,12 +45,8 @@ export default function ExplorePage() {
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(0);
 
-  const {
-    data: events,
-    isFetching,
-    refetch,
-  } = useQuery({
-    queryKey: ["explore"],
+  const { data: events, isFetching } = useQuery({
+    queryKey: ["explore", page, query],
     queryFn: async () => {
       const { data } = await api.events.get({
         query: {
@@ -80,7 +76,6 @@ export default function ExplorePage() {
               onChange={(event) => {
                 setQuery(event.target.value);
                 setPage(0);
-                refetch();
               }}
             />
             {query.length > 0 ? (
@@ -109,7 +104,6 @@ export default function ExplorePage() {
                   onClick={() => {
                     if (events?.previousPage) {
                       setPage(page - 1);
-                      refetch();
                     }
                   }}
                 />
@@ -123,7 +117,6 @@ export default function ExplorePage() {
                   onClick={() => {
                     if (events?.nextPage) {
                       setPage(page + 1);
-                      refetch();
                     }
                   }}
                 />

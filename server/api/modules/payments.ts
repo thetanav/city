@@ -3,6 +3,9 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { stripeClient } from "@/lib/stripe";
 import type Stripe from "stripe";
+import { rateLimit } from "elysia-rate-limit";
+
+// TODO: fix the tier type here and all over the project
 
 const checkoutSchema = t.Object({
   eventId: t.String(),
@@ -128,106 +131,91 @@ function assertSelections(selections: TierSelection[], tiers: RawTier[]) {
 }
 
 // /api/payments/checkout
-export const paymentsRoutes = new Elysia({ prefix: "/payments" }).post(
-  "/checkout",
-  async ({ request, body, set }) => {
-    const session = await auth.api.getSession({ headers: request.headers });
-    // console.log("Checkout session:", { session, body });
-    if (!session?.user) {
-      set.status = 401;
-      return { message: "Unauthorized" };
-    }
+export const paymentsRoutes = new Elysia({ prefix: "/payments" })
+  .use(rateLimit())
+  .post(
+    "/checkout",
+    async ({ request, body }) => {
+      const session = await auth.api.getSession({ headers: request.headers });
+      // console.log("Checkout session:", { session, body });
+      if (!session?.user) {
+        return { ok: false, message: "Unauthorised!" };
+      }
 
-    const event = await prisma.event.findUnique({
-      where: { id: body.eventId },
-    });
+      const event = await prisma.event.findUnique({
+        where: { id: body.eventId },
+      });
 
-    if (!event) {
-      set.status = 404;
-      return { message: "Event not found" };
-    }
+      if (!event) {
+        return { ok: false, message: "Event not found!" };
+      }
 
-    if (event.status !== "LIVE") {
-      set.status = 400;
-      return { message: "Event is not accepting purchases" };
-    }
+      if (event.status !== "LIVE") {
+        return { ok: false, message: "Event is not accepting purchases!" };
+      }
 
-    const tiers = normalizePrices(event.prices);
-    // console.log("Event tiers:", { body: body.tiers, normalized: tiers });
-    // body: [
-    //   { id: 'tier-1', name: 'General', qty: 2 },
-    //   { id: 'tier-2', name: 'VIP', qty: 1 }
-    // ],
-    // normalized: [
-    //   { name: 'General', price: 25, seats: 120 },
-    //   { name: 'VIP', price: 75, seats: 25 }
-    // ]
-    const selections = body.tiers.filter((tier) => tier.qty > 0);
-    //   { id: 'tier-1', name: 'General', qty: 2 },
-    //   { id: 'tier-2', name: 'VIP', qty: 1 }
-    const { errors, lineItems, subtotalCents } = assertSelections(
-      selections,
-      tiers,
-    );
+      const tiers = normalizePrices(event.prices);
+      const selections = body.tiers.filter((tier) => tier.qty > 0);
+      const { errors, lineItems, subtotalCents } = assertSelections(
+        selections,
+        tiers,
+      );
 
-    if (errors.length > 0) {
-      set.status = 400;
-      return { message: errors[0] };
-    }
+      if (errors.length > 0) {
+        return { ok: false, message: errors[0] };
+      }
 
-    if (lineItems.length === 0) {
-      set.status = 400;
-      return { message: "No ticket selections" };
-    }
+      if (lineItems.length === 0) {
+        return { ok: false, message: "No ticket selections!" };
+      }
 
-    const feeCents = Math.min(
-      500,
-      Math.max(0, Math.round(subtotalCents * 0.02)),
-    );
+      const feeCents = Math.min(
+        500,
+        Math.max(0, Math.round(subtotalCents * 0.02)),
+      );
 
-    if (feeCents > 0) {
-      lineItems.push({
-        quantity: 1,
-        price_data: {
-          currency: "inr",
-          unit_amount: feeCents,
-          product_data: {
-            name: "Service fee",
-            metadata: {
-              type: "fee",
+      if (feeCents > 0) {
+        lineItems.push({
+          quantity: 1,
+          price_data: {
+            currency: "inr",
+            unit_amount: feeCents,
+            product_data: {
+              name: "Service fee",
+              metadata: {
+                type: "fee",
+              },
             },
           },
+        });
+      }
+
+      const siteUrl = process.env.BETTER_AUTH_URL;
+      console.log("Site URL:", siteUrl);
+      if (!siteUrl) {
+        return { ok: false, message: "Missing site URL!" };
+      }
+
+      console.log("Creating Stripe session with line items:", lineItems);
+      const stripeSession = await stripeClient.checkout.sessions.create({
+        mode: "payment",
+        line_items: lineItems,
+        success_url: `${siteUrl}/e/${event.slug}?payment=success&session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${siteUrl}/e/${event.slug}?payment=cancel`,
+        customer_email: session.user.email ?? undefined,
+        metadata: {
+          userId: session.user.id,
+          eventId: event.id,
         },
       });
-    }
+      console.log("Created Stripe session:", {
+        id: stripeSession.id,
+        url: stripeSession.url,
+      });
 
-    const siteUrl = process.env.BETTER_AUTH_URL;
-    console.log("Site URL:", siteUrl);
-    if (!siteUrl) {
-      set.status = 500;
-      return { message: "Missing site URL" };
-    }
-
-    console.log("Creating Stripe session with line items:", lineItems);
-    const stripeSession = await stripeClient.checkout.sessions.create({
-      mode: "payment",
-      line_items: lineItems,
-      success_url: `${siteUrl}/e/${event.slug}?payment=success&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${siteUrl}/e/${event.slug}?payment=cancel`,
-      customer_email: session.user.email ?? undefined,
-      metadata: {
-        userId: session.user.id,
-        eventId: event.id,
-      },
-    });
-    console.log("Created Stripe session:", {
-      id: stripeSession.id,
-      url: stripeSession.url,
-    });
-
-    return { url: stripeSession.url };
-  },
-  {
-    body: checkoutSchema,
-  },
-);
+      return { ok: true, url: stripeSession.url };
+    },
+    {
+      body: checkoutSchema,
+    },
+  );

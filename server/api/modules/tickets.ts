@@ -9,7 +9,7 @@ export const ticketsRoutes = new Elysia({ prefix: "/tickets" })
       const session = await auth.api.getSession({ headers: request.headers });
       if (!session?.user) {
         set.status = 401;
-        return { message: "Unauthorized" };
+        return { ok: false, message: "Unauthorised!" };
       }
 
       const where: Record<string, unknown> = {};
@@ -35,11 +35,13 @@ export const ticketsRoutes = new Elysia({ prefix: "/tickets" })
         where.userId = session.user.id;
       }
 
-      return prisma.ticket.findMany({
+      const tickets = await prisma.ticket.findMany({
         where,
         orderBy: { createdAt: "desc" },
         include: { event: true },
       });
+
+      return { ok: true, data: tickets };
     },
     {
       query: t.Object({
@@ -50,11 +52,10 @@ export const ticketsRoutes = new Elysia({ prefix: "/tickets" })
   )
   .get(
     "/:id",
-    async ({ params, request, set }) => {
+    async ({ params, request }) => {
       const session = await auth.api.getSession({ headers: request.headers });
       if (!session?.user) {
-        set.status = 401;
-        return { message: "Unauthorized" };
+        return { ok: false, message: "Unauthorised!" };
       }
 
       const ticket = await prisma.ticket.findUnique({
@@ -63,8 +64,7 @@ export const ticketsRoutes = new Elysia({ prefix: "/tickets" })
       });
 
       if (!ticket) {
-        set.status = 404;
-        return { message: "Ticket not found" };
+        return { ok: false, message: "Ticket not found!" };
       }
 
       // Allow access if user owns the ticket or is the event creator
@@ -72,11 +72,10 @@ export const ticketsRoutes = new Elysia({ prefix: "/tickets" })
       const isCreator = ticket.event.creatorId === session.user.id;
 
       if (!isOwner && !isCreator) {
-        set.status = 403;
-        return { message: "Forbidden" };
+        return { ok: false, message: "Sign in with correct email!" };
       }
 
-      return ticket;
+      return { ok: true, data: ticket };
     },
     {
       params: t.Object({ id: t.String() }),
@@ -84,11 +83,10 @@ export const ticketsRoutes = new Elysia({ prefix: "/tickets" })
   )
   .put(
     "/:id",
-    async ({ params, body, request, set }) => {
+    async ({ params, body, request }) => {
       const session = await auth.api.getSession({ headers: request.headers });
       if (!session?.user) {
-        set.status = 401;
-        return { message: "Unauthorized" };
+        return { ok: false, message: "Unauthorized!" };
       }
 
       const ticket = await prisma.ticket.findUnique({
@@ -97,14 +95,12 @@ export const ticketsRoutes = new Elysia({ prefix: "/tickets" })
       });
 
       if (!ticket) {
-        set.status = 404;
-        return { message: "Ticket not found" };
+        return { ok: false, message: "Ticket not found!" };
       }
 
       // Only the event creator can update tickets (e.g. toggle validity)
       if (ticket.event.creatorId !== session.user.id) {
-        set.status = 403;
-        return { message: "Only the event organizer can update tickets" };
+        return { ok: false, message: "Sign in with correct email!" };
       }
 
       // Only allow toggling validity -- no other field changes
@@ -114,7 +110,7 @@ export const ticketsRoutes = new Elysia({ prefix: "/tickets" })
           data: { valid: body.valid },
           include: { event: true },
         });
-        return updated;
+        return { ok: false, data: updated };
       } catch (error: unknown) {
         if (
           typeof error === "object" &&
@@ -122,11 +118,9 @@ export const ticketsRoutes = new Elysia({ prefix: "/tickets" })
           "code" in error &&
           (error as { code?: string }).code === "P2025"
         ) {
-          set.status = 404;
-          return { message: "Ticket not found" };
+          return { ok: false, message: "Ticket not found!" };
         }
-        set.status = 500;
-        return { message: "Failed to update ticket" };
+        return { ok: false, message: "Failed to update ticket!" };
       }
     },
     {

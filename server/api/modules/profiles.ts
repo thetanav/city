@@ -6,7 +6,7 @@ export const profilesRoutes = new Elysia({ prefix: "/profiles" })
   .get("/", async ({ request }) => {
     const session = await auth.api.getSession({ headers: request.headers });
     if (!session?.user) {
-      throw new Error("Unauthorized");
+      return { ok: false, message: "Unauthorised!" };
     }
 
     const user = await prisma.user.findUnique({
@@ -20,15 +20,15 @@ export const profilesRoutes = new Elysia({ prefix: "/profiles" })
     });
 
     if (!user) {
-      throw new Error("User not found");
+      return { ok: false, message: "User not found!" };
     }
 
-    return user;
+    return { ok: true, data: user };
   })
   .put("/", async ({ request, body }) => {
     const session = await auth.api.getSession({ headers: request.headers });
     if (!session?.user) {
-      throw new Error("Unauthorized");
+      return { ok: false, message: "Unauthorised!" };
     }
 
     const { name } = body as {
@@ -49,5 +49,5 @@ export const profilesRoutes = new Elysia({ prefix: "/profiles" })
       },
     });
 
-    return user;
+    return { ok: true, data: user };
   });

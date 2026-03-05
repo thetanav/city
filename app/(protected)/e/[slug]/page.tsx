@@ -26,7 +26,7 @@ import { cn } from "@/lib/utils";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { notFound } from "next/navigation";
-import Loading from "@/components/loading";
+import { Loading } from "@/components/states";
 import { toastManager } from "@/components/ui/toast";
 
 type Tier = {
