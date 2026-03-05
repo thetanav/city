@@ -13,6 +13,7 @@ type CreatedTicket = {
 type TicketCreateStatus =
   | "created"
   | "skipped"
+  | "unpaid_session"
   | "missing_event"
   | "missing_items"
   | "missing_metadata"
@@ -60,6 +61,10 @@ export async function createTicketsFromSession(
   }
 
   const fullSession = await ensureSessionWithItems(session);
+  if (fullSession.payment_status !== "paid") {
+    return { status: "unpaid_session", createdTickets: [] };
+  }
+
   const paymentId = fullSession.payment_intent?.toString() ?? null;
 
   // Idempotency: if tickets already exist for this payment, skip
