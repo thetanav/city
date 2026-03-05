@@ -181,7 +181,11 @@ export const eventsRoutes = new Elysia({ prefix: "/events" })
 
       const event = await prisma.event.findUnique({
         where: { id: params.id },
-        select: { creatorId: true },
+        select: {
+          creatorId: true,
+          startDate: true,
+          endDate: true,
+        },
       });
 
       if (!event) {
@@ -227,6 +231,15 @@ export const eventsRoutes = new Elysia({ prefix: "/events" })
         updateData.endDate = d;
       }
 
+      const nextStartDate =
+        updateData.startDate instanceof Date ? updateData.startDate : event.startDate;
+      const nextEndDate =
+        updateData.endDate instanceof Date ? updateData.endDate : event.endDate;
+
+      if (nextStartDate >= nextEndDate) {
+        return { ok: false, message: "End date must be after start date" };
+      }
+
       if (body.slug !== undefined) {
         const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
         if (!slugPattern.test(body.slug) || body.slug.length < 3) {
@@ -266,6 +279,104 @@ export const eventsRoutes = new Elysia({ prefix: "/events" })
     {
       params: t.Object({ id: t.String() }),
       body: eventUpdateSchema,
+    },
+  )
+  .get("/mine", async ({ request }) => {
+    const session = await auth.api.getSession({ headers: request.headers });
+    if (!session?.user) {
+      return { ok: false, message: "Unauthorised!" };
+    }
+
+    const events = await prisma.event.findMany({
+      where: { creatorId: session.user.id },
+      orderBy: { startDate: "desc" },
+      select: {
+        id: true,
+        title: true,
+        slug: true,
+        startDate: true,
+        endDate: true,
+        location: true,
+        city: true,
+        status: true,
+        totalTickets: true,
+        _count: {
+          select: { tickets: true },
+        },
+      },
+    });
+
+    if (events.length === 0) {
+      return { ok: true, data: [] };
+    }
+
+    const soldByEvent = await prisma.ticket.groupBy({
+      by: ["eventId"],
+      where: {
+        eventId: { in: events.map((event) => event.id) },
+        valid: true,
+      },
+      _sum: { qty: true },
+    });
+
+    const soldMap = new Map(
+      soldByEvent.map((entry) => [entry.eventId, entry._sum.qty ?? 0]),
+    );
+
+    return {
+      ok: true,
+      data: events.map((event) => ({
+        ...event,
+        soldTickets: soldMap.get(event.id) ?? 0,
+        hasIssuedTickets: event._count.tickets > 0,
+      })),
+    };
+  })
+  .delete(
+    "/:id",
+    async ({ params, request }) => {
+      const session = await auth.api.getSession({ headers: request.headers });
+      if (!session?.user) {
+        return { ok: false, message: "Unauthorized!" };
+      }
+
+      const event = await prisma.event.findUnique({
+        where: { id: params.id },
+        select: {
+          id: true,
+          creatorId: true,
+          _count: {
+            select: { tickets: true },
+          },
+        },
+      });
+
+      if (!event) {
+        return { ok: false, message: "Event not found!" };
+      }
+
+      if (event.creatorId !== session.user.id) {
+        return {
+          ok: false,
+          message: "Sign in from correct email!",
+        };
+      }
+
+      if (event._count.tickets > 0) {
+        return {
+          ok: false,
+          message: "Cannot delete an event after tickets have been issued",
+        };
+      }
+
+      await prisma.event.delete({
+        where: { id: params.id },
+      });
+
+      return { ok: true, data: { id: params.id } };
+    },
+    {
+      params: t.Object({ id: t.String() }),
     },
   )
   .get(

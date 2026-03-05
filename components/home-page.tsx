@@ -90,7 +90,7 @@ export default function HomePage({
           </p>
         </div>
         <div className="flex gap-2">
-          <Link href="/events/my">
+          <Link href="/dashboard">
             <Button
               variant="outline"
               className="active:scale-95 transition-transform">

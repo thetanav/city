@@ -3,6 +3,7 @@
 import * as React from "react";
 import { CalendarDays, CircleCheck, LogOut, UserRound } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,15 +16,15 @@ import { cn } from "@/lib/utils";
 
 const QUERY_KEYS = {
   profile: ["profile"] as const,
-  events: ["events"] as const,
+  events: ["creator-events"] as const,
 };
 
 type EventStatus = "DRAFT" | "LIVE" | "STOPPED";
 
 type ProfileData = {
-  name?: string | null;
-  email?: string | null;
-  image?: string | null;
+  name: string | null;
+  email: string | null;
+  image: string | null;
 };
 
 type SettingsEvent = {
@@ -35,7 +36,15 @@ type SettingsEvent = {
   location: string;
   city: string;
   status: EventStatus;
+  totalTickets: number;
+  soldTickets: number;
+  hasIssuedTickets: boolean;
 };
+
+type SettingsEventUpdate = Omit<
+  SettingsEvent,
+  "soldTickets" | "hasIssuedTickets"
+>;
 
 type EventDraft = {
   id: string;
@@ -57,6 +66,34 @@ function apiErrorMessage(value: unknown, fallback: string) {
   }
 
   return fallback;
+}
+
+function extractOkData(value: unknown, fallback: string) {
+  if (!isRecord(value)) {
+    throw new Error(fallback);
+  }
+
+  if (value.ok !== true) {
+    throw new Error(apiErrorMessage(value, fallback));
+  }
+
+  return value.data;
+}
+
+function normalizeProfile(value: unknown): ProfileData {
+  if (!isRecord(value)) {
+    return {
+      name: null,
+      email: null,
+      image: null,
+    };
+  }
+
+  return {
+    name: typeof value.name === "string" ? value.name : null,
+    email: typeof value.email === "string" ? value.email : null,
+    image: typeof value.image === "string" ? value.image : null,
+  };
 }
 
 function parseIsoDate(value: unknown) {
@@ -81,6 +118,9 @@ function normalizeEvent(value: unknown): SettingsEvent | null {
   const title = value.title;
   const slug = value.slug;
   const location = value.location;
+  const totalTickets = value.totalTickets;
+  const soldTickets = value.soldTickets;
+  const hasIssuedTickets = value.hasIssuedTickets;
   const startDate = parseIsoDate(value.startDate);
   const endDate = parseIsoDate(value.endDate);
 
@@ -89,6 +129,9 @@ function normalizeEvent(value: unknown): SettingsEvent | null {
     typeof title !== "string" ||
     typeof slug !== "string" ||
     typeof location !== "string" ||
+    typeof totalTickets !== "number" ||
+    typeof soldTickets !== "number" ||
+    typeof hasIssuedTickets !== "boolean" ||
     !startDate ||
     !endDate
   ) {
@@ -110,19 +153,52 @@ function normalizeEvent(value: unknown): SettingsEvent | null {
     location,
     city: typeof value.city === "string" ? value.city : "",
     status: safeStatus,
+    totalTickets,
+    soldTickets,
+    hasIssuedTickets,
   };
 }
 
-function extractEventItems(payload: unknown) {
-  if (Array.isArray(payload)) {
-    return payload;
+function normalizeUpdatedEvent(value: unknown): SettingsEventUpdate | null {
+  if (!isRecord(value)) return null;
+
+  const id = value.id;
+  const title = value.title;
+  const slug = value.slug;
+  const location = value.location;
+  const totalTickets = value.totalTickets;
+  const startDate = parseIsoDate(value.startDate);
+  const endDate = parseIsoDate(value.endDate);
+
+  if (
+    typeof id !== "string" ||
+    typeof title !== "string" ||
+    typeof slug !== "string" ||
+    typeof location !== "string" ||
+    typeof totalTickets !== "number" ||
+    !startDate ||
+    !endDate
+  ) {
+    return null;
   }
 
-  if (isRecord(payload) && Array.isArray(payload.data)) {
-    return payload.data;
-  }
+  const status = value.status;
+  const safeStatus: EventStatus =
+    status === "LIVE" || status === "STOPPED" || status === "DRAFT"
+      ? status
+      : "DRAFT";
 
-  return [];
+  return {
+    id,
+    title,
+    slug,
+    startDate,
+    endDate,
+    location,
+    city: typeof value.city === "string" ? value.city : "",
+    status: safeStatus,
+    totalTickets,
+  };
 }
 
 function formatWhen(iso: string) {
@@ -145,12 +221,6 @@ function toLocalInputValue(iso: string) {
   return new Date(date.getTime() - offset).toISOString().slice(0, 16);
 }
 
-function toIsoOrOriginal(value: string) {
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
-  return parsed.toISOString();
-}
-
 function eventToDraft(event: SettingsEvent): EventDraft {
   return {
     id: event.id,
@@ -163,19 +233,10 @@ function eventToDraft(event: SettingsEvent): EventDraft {
   };
 }
 
-function draftToEvent(
-  draft: EventDraft,
-  fallback: SettingsEvent,
-): SettingsEvent {
-  return {
-    ...fallback,
-    title: draft.title,
-    startDate: toIsoOrOriginal(draft.startDate),
-    endDate: toIsoOrOriginal(draft.endDate),
-    location: draft.location,
-    city: draft.city,
-    status: draft.status,
-  };
+function statusVariant(status: EventStatus): "success" | "warning" | "outline" {
+  if (status === "LIVE") return "success";
+  if (status === "STOPPED") return "warning";
+  return "outline";
 }
 
 export default function SettingsPage() {
@@ -195,20 +256,24 @@ export default function SettingsPage() {
         throw new Error("Failed to load profile");
       }
 
-      return data as ProfileData;
+      return normalizeProfile(extractOkData(data, "Failed to load profile"));
     },
   });
 
   const eventsQuery = useQuery({
     queryKey: QUERY_KEYS.events,
     queryFn: async () => {
-      const { data, error } = await api.events.get();
+      const { data, error } = await api.events.mine.get();
 
       if (error) {
         throw new Error(apiErrorMessage(error.value, "Failed to load events"));
       }
 
-      const items = extractEventItems(data);
+      const items = extractOkData(data, "Failed to load events");
+      if (!Array.isArray(items)) {
+        throw new Error("Failed to load events");
+      }
+
       return items
         .map(normalizeEvent)
         .filter((event): event is SettingsEvent => {
@@ -229,7 +294,7 @@ export default function SettingsPage() {
         throw new Error("Failed to save profile");
       }
 
-      return data as ProfileData;
+      return normalizeProfile(extractOkData(data, "Failed to save profile"));
     },
     onSuccess: (updated) => {
       queryClient.setQueryData(QUERY_KEYS.profile, updated);
@@ -256,7 +321,14 @@ export default function SettingsPage() {
         throw new Error(apiErrorMessage(error.value, "Failed to update event"));
       }
 
-      return normalizeEvent(data);
+      const updated = normalizeUpdatedEvent(
+        extractOkData(data, "Failed to update event"),
+      );
+      if (!updated) {
+        throw new Error("Failed to update event");
+      }
+
+      return updated;
     },
     onSuccess: (updated, draft) => {
       queryClient.setQueryData<SettingsEvent[]>(
@@ -266,7 +338,10 @@ export default function SettingsPage() {
 
           return current.map((event) => {
             if (event.id !== draft.id) return event;
-            return updated ?? draftToEvent(draft, event);
+            return {
+              ...event,
+              ...updated,
+            };
           });
         },
       );
@@ -280,11 +355,12 @@ export default function SettingsPage() {
         throw new Error("Delete route unavailable");
       }
 
-      const { error } = await endpoint.delete();
+      const { data, error } = await endpoint.delete();
       if (error) {
         throw new Error(apiErrorMessage(error.value, "Failed to delete event"));
       }
 
+      extractOkData(data, "Failed to delete event");
       return id;
     },
     onSuccess: (id) => {
@@ -395,8 +471,12 @@ function ProfilePanel({
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    await onSave(displayName);
-    setSaved(true);
+    try {
+      await onSave(displayName);
+      setSaved(true);
+    } catch {
+      setSaved(false);
+    }
   }
 
   const avatarUrl = profile?.image ?? null;
@@ -500,29 +580,44 @@ function EventsPanel({
   onDelete: (id: string) => Promise<void>;
 }) {
   const [draft, setDraft] = React.useState<EventDraft | null>(null);
-  const [localError, setLocalError] = React.useState<string | null>(null);
+  const [actionError, setActionError] = React.useState<{
+    id: string;
+    message: string;
+  } | null>(null);
 
   function resetDraft() {
     setDraft(null);
-    setLocalError(null);
+    setActionError(null);
   }
 
   async function saveDraft() {
     if (!draft) return;
 
     if (!draft.title.trim()) {
-      setLocalError("Title is required");
+      setActionError({ id: draft.id, message: "Title is required" });
       return;
     }
 
     if (!draft.startDate || !draft.endDate) {
-      setLocalError("Start and end date are required");
+      setActionError({
+        id: draft.id,
+        message: "Start and end date are required",
+      });
       return;
     }
 
-    setLocalError(null);
-    await onUpdate(draft);
-    resetDraft();
+    setActionError(null);
+
+    try {
+      await onUpdate(draft);
+      resetDraft();
+    } catch (error) {
+      setActionError({
+        id: draft.id,
+        message:
+          error instanceof Error ? error.message : "Failed to update event",
+      });
+    }
   }
 
   if (loading) {
@@ -565,13 +660,25 @@ function EventsPanel({
                 </p>
               </div>
 
-              <div className="flex gap-2">
+              <div className="flex flex-wrap justify-end gap-2">
+                <Button
+                  render={<Link href={`/e/${event.slug}`} />}
+                  variant="outline"
+                  size="sm">
+                  View page
+                </Button>
+                <Button
+                  render={<Link href={`/dashboard/${event.slug}`} />}
+                  variant="outline"
+                  size="sm">
+                  Sales
+                </Button>
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
                   onClick={() => {
-                    setLocalError(null);
+                    setActionError(null);
                     setDraft(isEditing ? null : eventToDraft(event));
                   }}>
                   {isEditing ? "Cancel" : "Edit"}
@@ -579,37 +686,51 @@ function EventsPanel({
 
                 <Button
                   type="button"
-                  variant="outline"
+                  variant="destructive-outline"
                   size="sm"
-                  disabled={deletingId === event.id}
+                  disabled={deletingId === event.id || event.hasIssuedTickets}
                   onClick={async () => {
-                    await onDelete(event.id);
-                    if (isEditing) resetDraft();
+                    setActionError(null);
+
+                    try {
+                      await onDelete(event.id);
+                      if (isEditing) resetDraft();
+                    } catch (error) {
+                      setActionError({
+                        id: event.id,
+                        message:
+                          error instanceof Error
+                            ? error.message
+                            : "Failed to delete event",
+                      });
+                    }
                   }}>
                   {deletingId === event.id ? "Deleting..." : "Delete"}
                 </Button>
               </div>
             </div>
 
-            <div className="mt-2 text-xs text-muted-foreground">
-              {formatWhen(event.startDate)} to {formatWhen(event.endDate)}
+            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+              <span>
+                {formatWhen(event.startDate)} to {formatWhen(event.endDate)}
+              </span>
+              <span>
+                {event.location}
+                {event.city ? `, ${event.city}` : ""}
+              </span>
+              <span>
+                {event.soldTickets}/{event.totalTickets} sold
+              </span>
             </div>
-            <div className="text-xs text-muted-foreground">
-              {event.location}
-              {event.city ? `, ${event.city}` : ""}
-            </div>
-            <div className="mt-1">
-              <Badge
-                variant={
-                  event.status === "LIVE"
-                    ? "success"
-                    : event.status === "STOPPED"
-                      ? "warning"
-                      : "outline"
-                }
-                size="sm">
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <Badge variant={statusVariant(event.status)} size="sm">
                 {event.status}
               </Badge>
+              {event.hasIssuedTickets ? (
+                <span className="text-xs text-muted-foreground">
+                  Delete is locked after tickets are issued.
+                </span>
+              ) : null}
             </div>
 
             {currentDraft ? (
@@ -713,8 +834,10 @@ function EventsPanel({
                   </select>
                 </div>
 
-                {localError ? (
-                  <p className="text-xs text-destructive">{localError}</p>
+                {actionError?.id === event.id ? (
+                  <p className="text-xs text-destructive">
+                    {actionError.message}
+                  </p>
                 ) : null}
 
                 <div className="flex justify-end">
@@ -723,6 +846,10 @@ function EventsPanel({
                   </Button>
                 </div>
               </div>
+            ) : actionError?.id === event.id ? (
+              <p className="mt-3 text-xs text-destructive">
+                {actionError.message}
+              </p>
             ) : null}
           </div>
         );
