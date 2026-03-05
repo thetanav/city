@@ -1,8 +1,8 @@
 import type Stripe from "stripe";
 
+import { sendTicketConfirmationEmail } from "@/email";
 import { prisma } from "@/lib/prisma";
 import { stripeClient } from "@/lib/stripe";
-import { sendTicketConfirmationEmail } from "@/lib/email";
 
 type CreatedTicket = {
   tierName: string;
@@ -218,7 +218,10 @@ export async function createTicketsFromSession(
         });
       }
     } catch (emailError) {
-      console.error("[payments] Failed to send confirmation email:", emailError);
+      console.error(
+        "[payments] Failed to send confirmation email:",
+        emailError,
+      );
     }
   }
 

@@ -65,7 +65,8 @@ model Event {
   city         String?
   contactEmail String?
   prices       Json?
-  totalTickets Int         @default(0)
+  totalTickets Int
+  availableTickets Int
   genre        String[]    @default([])
   tickets      Ticket[]
   creatorId    String?
