@@ -1,5 +1,14 @@
-import { Empty, Error, Loading } from "@/components/states";
+"use client";
+
+import { Button } from "@/components/ui/button";
+import { api } from "@/lib/eden";
+import { useMutation } from "@tanstack/react-query";
 
 export default function Page() {
-  return <Empty />;
+  const { mutate } = useMutation({
+    mutationFn: async () => {
+      const data = await api.health.get();
+    },
+  });
+  return <Button onClick={() => mutate()}>GOOOO!!!</Button>;
 }

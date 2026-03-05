@@ -1,3 +1,2 @@
 - qr scanner for organizers
-- fix webhooks it is fucked up
-- parse types of requests with zod of treaty
+- fix the type of tier or selections

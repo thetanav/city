@@ -53,27 +53,27 @@ enum EventStatus {
 }
 
 model Event {
-  id           String      @id @default(cuid())
-  posterImage  String?
-  title        String
-  tagline      String?
-  description  String
-  slug         String      @unique
-  startDate    DateTime
-  endDate      DateTime
-  location     String
-  city         String?
-  contactEmail String?
-  prices       Json?
-  totalTickets Int
-  availableTickets Int
-  genre        String[]    @default([])
-  tickets      Ticket[]
-  creatorId    String?
-  creator      User?       @relation("EventCreator", fields: [creatorId], references: [id], onDelete: SetNull)
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
-  status       EventStatus @default(DRAFT)
+  id            String      @id @default(cuid())
+  posterImage   String?
+  title         String
+  tagline       String?
+  description   String
+  slug          String      @unique
+  startDate     DateTime
+  endDate       DateTime
+  location      String
+  city          String?
+  contactEmail  String?
+  prices        Json?
+  totalTickets  Int
+  bookedTickets Int         @default(0)
+  genre         String[]    @default([])
+  tickets       Ticket[]
+  creatorId     String?
+  creator       User?       @relation("EventCreator", fields: [creatorId], references: [id], onDelete: SetNull)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  status        EventStatus @default(DRAFT)
 
   @@index([startDate])
   @@index([creatorId])

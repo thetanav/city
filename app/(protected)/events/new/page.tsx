@@ -523,7 +523,7 @@ export default function EventCreator() {
                     autoComplete="off"
                   />
                 </div>
-                <div className="relative overflow-hidden rounded-lg border aspect-[16/10] bg-muted">
+                <div className="relative overflow-hidden rounded-lg border aspect-16/10 bg-muted">
                   {coverUrl.trim() ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
