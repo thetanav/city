@@ -2,17 +2,16 @@
 
 import { Calendar, MapPin, Search, X } from "lucide-react";
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/eden";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   Pagination,
   PaginationContent,
-  PaginationEllipsis,
   PaginationItem,
   PaginationLink,
   PaginationNext,
@@ -44,13 +43,24 @@ function formatShortDate(iso: string) {
 export default function ExplorePage() {
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(0);
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedQuery(query);
+    }, 300);
+
+    return () => window.clearTimeout(timer);
+  }, [query]);
 
   const { data: events, isFetching } = useQuery({
-    queryKey: ["explore", page, query],
+    queryKey: ["explore", { page, query: debouncedQuery }],
+    placeholderData: keepPreviousData,
+    staleTime: 30_000,
     queryFn: async () => {
       const { data } = await api.events.get({
         query: {
-          query,
+          query: debouncedQuery,
           offset: page * 10,
           limit: 10,
         },
@@ -81,7 +91,10 @@ export default function ExplorePage() {
             {query.length > 0 ? (
               <button
                 type="button"
-                onClick={() => setQuery("")}
+                onClick={() => {
+                  setQuery("");
+                  setPage(0);
+                }}
                 className="absolute top-1/2 right-3 -translate-y-1/2 text-muted-foreground hover:text-foreground"
               >
                 <X className="size-4" />
@@ -152,7 +165,7 @@ function LoadingGrid() {
   );
 }
 
-function EventCard({ event }: { event: any }) {
+function EventCard({ event }: { event: ExploreEvent }) {
   const dateText = formatShortDate(event.startDate);
 
   return (
