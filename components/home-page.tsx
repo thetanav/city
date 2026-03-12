@@ -7,12 +7,13 @@ import {
   MapPin,
   Clock,
   ChevronRight,
-  Plus,
-  X,
   User2,
+  ExternalLink,
+  QrCode,
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import Link from "next/link";
+import { motion, AnimatePresence, Variants } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -21,6 +22,15 @@ import {
   CardTitle,
   CardDescription,
 } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { AspectRatio } from "@/components/ui/aspect-ratio";
+import { Badge } from "@/components/ui/badge";
 
 type TicketData = {
   id: string;
@@ -37,6 +47,21 @@ type TicketData = {
   };
 };
 
+const container: Variants = {
+  hidden: { opacity: 0 },
+  show: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.05,
+    },
+  },
+};
+
+const item: Variants = {
+  hidden: { opacity: 0, y: 10 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.3 } },
+};
+
 export default function HomePage({
   user,
   tickets,
@@ -44,171 +69,254 @@ export default function HomePage({
   user: any;
   tickets: TicketData[];
 }) {
-  const [activeTicket, setActiveTicket] = React.useState<TicketData | null>(
-    null,
-  );
-
-  React.useEffect(() => {
-    if (!activeTicket) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setActiveTicket(null);
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [activeTicket]);
+  const [activeTicket, setActiveTicket] = React.useState<TicketData | null>(null);
 
   if (!user) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[80vh] px-4 text-center">
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        className="flex flex-col items-center justify-center min-h-[70vh] px-4 text-center"
+      >
         <div className="max-w-md space-y-6">
-          <TicketIcon className="mx-auto size-12 text-muted-foreground" />
-          <h1 className="text-3xl font-bold tracking-tight">
+          <div className="relative inline-flex items-center justify-center">
+             <div className="absolute inset-0 bg-primary/20 blur-3xl rounded-full" />
+             <TicketIcon className="relative size-16 text-primary mb-2" />
+          </div>
+          <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl">
             Your Gateway to the Best Events
           </h1>
-          <p className="text-muted-foreground">
+          <p className="text-lg text-muted-foreground">
             Sign in to access your tickets, manage your events, and explore
-            what's happening in your city.
+            what&apos;s happening in your city.
           </p>
-          <Link href="/explore">
-            <Button>Explore Events</Button>
-          </Link>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
+            <Link href="/explore">
+              <Button size="lg" className="w-full sm:w-auto shadow-lg shadow-primary/25">
+                Explore Events
+              </Button>
+            </Link>
+            <Link href="/auth">
+              <Button size="lg" variant="outline" className="w-full sm:w-auto">
+                Sign In
+              </Button>
+            </Link>
+          </div>
         </div>
-      </div>
+      </motion.div>
     );
   }
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-12">
       {/* Header */}
-      <section className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">
-            Hey, {user.name}
+      <motion.section 
+        initial={{ opacity: 0, x: -20 }}
+        animate={{ opacity: 1, x: 0 }}
+        className="flex flex-col sm:flex-row sm:items-end justify-between gap-6"
+      >
+        <div className="space-y-1">
+          <Badge variant="secondary" className="mb-2 px-3 py-1 text-xs font-medium bg-primary/10 text-primary border-none">
+            Member Dashboard
+          </Badge>
+          <h1 className="text-4xl font-bold tracking-tight">
+            Hey, {user.name.split(' ')[0]} 👋
           </h1>
-          <p className="text-muted-foreground mt-1">
-            Ready for your next experience?
+          <p className="text-muted-foreground text-lg">
+            You have {tickets.length} upcoming {tickets.length === 1 ? 'experience' : 'experiences'}.
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-3">
           <Link href="/dashboard">
             <Button
               variant="outline"
-              className="active:scale-95 transition-transform">
-              <User2 className="mr-2 size-4" />
-              My Events
+              size="lg"
+              className="group active:scale-95 transition-all"
+            >
+              <User2 className="mr-2 size-4 text-muted-foreground group-hover:text-primary transition-colors" />
+              Manage Events
+            </Button>
+          </Link>
+          <Link href="/explore">
+            <Button
+              size="lg"
+              className="shadow-md"
+            >
+              Find More
             </Button>
           </Link>
         </div>
-      </section>
+      </motion.section>
 
       {/* Tickets */}
-      <section className="space-y-4">
-        <h2 className="text-lg font-semibold">All Tickets</h2>
+      <section className="space-y-6">
+        <div className="flex items-center justify-between border-b pb-4">
+          <h2 className="text-2xl font-bold flex items-center gap-2">
+            <TicketIcon className="size-6 text-primary" />
+            Your Tickets
+          </h2>
+          {tickets.length > 0 && (
+            <span className="text-sm font-medium text-muted-foreground bg-muted px-2 py-1 rounded-md">
+              {tickets.length} Total
+            </span>
+          )}
+        </div>
 
         {tickets.length > 0 ? (
-          <div className="grid gap-4 md:grid-cols-2">
+          <motion.div 
+            variants={container}
+            initial="hidden"
+            animate="show"
+            className="grid gap-6 md:grid-cols-2 lg:grid-cols-2"
+          >
             {tickets.map((ticket) => (
-              <TicketCard
-                key={ticket.id}
-                ticket={ticket}
-                onClick={() => setActiveTicket(ticket)}
-              />
+              <motion.div key={ticket.id} variants={item}>
+                <TicketCard
+                  ticket={ticket}
+                  onClick={() => setActiveTicket(ticket)}
+                />
+              </motion.div>
             ))}
-          </div>
+          </motion.div>
         ) : (
-          <Card>
-            <CardContent className="flex flex-col items-center justify-center py-12 text-center space-y-3">
-              <TicketIcon className="size-8 text-muted-foreground" />
-              <div>
-                <h3 className="font-semibold">No tickets yet</h3>
-                <p className="text-sm text-muted-foreground">
-                  Your upcoming event tickets will appear here once you purchase
-                  them.
-                </p>
-              </div>
-              <Link href="/explore">
-                <Button variant="link" className="text-sm">
-                  Find your first event <ChevronRight className="ml-1 size-4" />
-                </Button>
-              </Link>
-            </CardContent>
-          </Card>
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+          >
+            <Card className="border-dashed border-2 bg-muted/30">
+              <CardContent className="flex flex-col items-center justify-center py-16 text-center space-y-4">
+                <div className="bg-background p-4 rounded-full shadow-sm border">
+                  <TicketIcon className="size-10 text-muted-foreground/50" />
+                </div>
+                <div className="max-w-xs space-y-2">
+                  <h3 className="text-xl font-bold">No tickets yet</h3>
+                  <p className="text-muted-foreground">
+                    Your upcoming event tickets will appear here once you purchase
+                    them.
+                  </p>
+                </div>
+                <Link href="/explore">
+                  <Button variant="default" className="mt-2 group">
+                    Find your first event 
+                    <ChevronRight className="ml-1 size-4 group-hover:translate-x-1 transition-transform" />
+                  </Button>
+                </Link>
+              </CardContent>
+            </Card>
+          </motion.div>
         )}
       </section>
 
-      {activeTicket && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-8"
-          role="dialog"
-          aria-modal="true">
-          <button
-            type="button"
-            className="absolute inset-0 cursor-default"
-            aria-label="Close ticket details"
-            onClick={() => setActiveTicket(null)}
-          />
-          <div className="relative z-10 w-full max-w-lg">
-            <Card className="shadow-xl">
-              <CardHeader>
-                <CardTitle>Ticket details</CardTitle>
-                <CardDescription>
-                  Show this QR code at the entrance.
-                </CardDescription>
-              </CardHeader>
-              <button
-                type="button"
-                className="absolute right-4 top-4 rounded-md p-2 text-muted-foreground transition hover:text-foreground"
-                aria-label="Close"
-                onClick={() => setActiveTicket(null)}>
-                <X className="size-4" />
-              </button>
-              <CardContent className="grid gap-6">
-                <div className="flex items-center justify-between gap-4">
-                  <div className="space-y-2">
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                      {activeTicket.tierName}
-                    </p>
-                    <p className="text-lg font-semibold">
+      {/* Ticket Details Dialog */}
+      <Dialog open={!!activeTicket} onOpenChange={(open) => !open && setActiveTicket(null)}>
+        <DialogContent className="sm:max-w-md p-0 overflow-hidden border-none shadow-2xl">
+          {activeTicket && (
+            <div className="relative">
+              {/* Event Banner */}
+              <div className="relative h-48 w-full bg-muted">
+                {activeTicket.event.posterImage ? (
+                  <img
+                    src={activeTicket.event.posterImage}
+                    alt={activeTicket.event.title}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <TicketIcon className="size-12 text-muted-foreground/30" />
+                  </div>
+                )}
+                <div className="absolute inset-0 bg-gradient-to-t from-background to-transparent" />
+                <Badge className="absolute top-4 left-4 bg-primary text-primary-foreground font-bold shadow-lg">
+                  {activeTicket.tierName}
+                </Badge>
+              </div>
+
+              <div className="p-6 pt-0 relative -mt-12">
+                <div className="bg-background rounded-xl border p-6 shadow-sm space-y-6">
+                  <div className="space-y-1">
+                    <h2 className="text-2xl font-bold leading-tight">
                       {activeTicket.event.title}
-                    </p>
+                    </h2>
                     {activeTicket.valid === false && (
-                      <p className="text-xs font-semibold text-destructive">
-                        Ticket invalidated by organizer
-                      </p>
+                      <Badge variant="destructive" className="mt-1">
+                        Invalidated by organizer
+                      </Badge>
                     )}
-                    <p className="text-sm text-muted-foreground">
-                      {new Intl.DateTimeFormat("en-US", {
-                        weekday: "short",
-                        month: "short",
-                        day: "numeric",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      }).format(new Date(activeTicket.event.startDate))}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      {activeTicket.event.location}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      Qty: {activeTicket.qty}
-                    </p>
                   </div>
-                  <div className="bg-white p-3 rounded-md shadow-sm">
-                    <QRCodeSVG value={activeTicket.id} size={120} />
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="flex items-start gap-2">
+                      <Calendar className="size-4 text-primary mt-0.5 shrink-0" />
+                      <div className="text-sm">
+                        <p className="font-semibold">Date</p>
+                        <p className="text-muted-foreground">
+                          {new Intl.DateTimeFormat("en-US", {
+                            weekday: "short",
+                            month: "short",
+                            day: "numeric",
+                          }).format(new Date(activeTicket.event.startDate))}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <Clock className="size-4 text-primary mt-0.5 shrink-0" />
+                      <div className="text-sm">
+                        <p className="font-semibold">Time</p>
+                        <p className="text-muted-foreground">
+                          {new Intl.DateTimeFormat("en-US", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          }).format(new Date(activeTicket.event.startDate))}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2 col-span-2">
+                      <MapPin className="size-4 text-primary mt-0.5 shrink-0" />
+                      <div className="text-sm">
+                        <p className="font-semibold">Location</p>
+                        <p className="text-muted-foreground line-clamp-1">
+                          {activeTicket.event.location}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col items-center justify-center p-6 bg-muted/50 rounded-xl border border-dashed gap-4">
+                    <div className="bg-white p-4 rounded-xl shadow-inner border">
+                      <QRCodeSVG value={activeTicket.id} size={160} level="H" />
+                    </div>
+                    <div className="text-center space-y-1">
+                      <p className="text-xs font-mono text-muted-foreground uppercase tracking-widest">
+                        Ticket ID: {activeTicket.id.slice(0, 8)}...
+                      </p>
+                      <p className="text-sm font-bold">
+                        Qty: {activeTicket.qty} Adult Admission
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="flex-1"
+                      onClick={() => setActiveTicket(null)}
+                    >
+                      Close
+                    </Button>
+                    <Link href={`/e/${activeTicket.event.id}`} className="flex-1">
+                      <Button className="w-full gap-2">
+                        Event Page <ExternalLink className="size-3" />
+                      </Button>
+                    </Link>
                   </div>
                 </div>
-                <div className="flex justify-end">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setActiveTicket(null)}>
-                    Close
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-      )}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -232,66 +340,82 @@ function TicketCard({
   }).format(start);
 
   return (
-    <button
+    <motion.button
+      whileHover={{ y: -4 }}
+      whileTap={{ scale: 0.98 }}
+      transition={{ duration: 0.2 }}
       type="button"
-      className="text-left w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-      onClick={onClick}>
-      <Card className="hover:bg-muted/50 transition-colors">
-        <CardContent className="flex gap-4 pt-6">
-          {/* Event Image */}
-          <div className="w-20 h-20 rounded-md overflow-hidden shrink-0 bg-muted">
+      className="text-left w-full group focus-visible:outline-none"
+      onClick={onClick}
+    >
+      <Card className="overflow-hidden border-2 border-transparent group-hover:border-primary/20 transition-all duration-300 shadow-sm group-hover:shadow-md h-full">
+        <div className="flex h-full min-h-[140px]">
+          {/* Left Side: Image/Banner */}
+          <div className="w-32 relative bg-muted shrink-0 overflow-hidden">
             {ticket.event.posterImage ? (
-              // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={ticket.event.posterImage}
                 alt={ticket.event.title}
-                className="w-full h-full object-cover"
+                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
               />
             ) : (
               <div className="w-full h-full flex items-center justify-center">
-                <TicketIcon className="size-6 text-muted-foreground" />
+                <TicketIcon className="size-8 text-muted-foreground/40" />
               </div>
             )}
+            <div className="absolute inset-0 bg-black/10 group-hover:bg-transparent transition-colors" />
+            <div className="absolute top-2 left-2">
+              <Badge className="bg-background/90 text-foreground text-[10px] font-bold h-5 px-1.5 backdrop-blur-sm border-none">
+                {ticket.qty}x
+              </Badge>
+            </div>
           </div>
 
-          {/* Info */}
-          <div className="flex-1 min-w-0 space-y-2">
-            <div>
-              <p className="text-xs text-muted-foreground">{ticket.tierName}</p>
-              <h3 className="font-semibold truncate">{ticket.event.title}</h3>
+          {/* Right Side: Info */}
+          <div className="flex-1 p-5 flex flex-col justify-between min-w-0">
+            <div className="space-y-1">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-primary truncate">
+                  {ticket.tierName}
+                </p>
+                {ticket.valid === false && (
+                  <Badge variant="destructive" className="h-4 text-[9px] px-1 capitalize">
+                    Invalid
+                  </Badge>
+                )}
+              </div>
+              <h3 className="font-bold text-lg leading-tight truncate group-hover:text-primary transition-colors">
+                {ticket.event.title}
+              </h3>
             </div>
-            {ticket.valid === false && (
-              <p className="text-xs font-semibold text-destructive">
-                Invalidated by organizer
-              </p>
-            )}
-            <div className="space-y-1 text-sm text-muted-foreground">
-              <div className="flex items-center gap-1.5">
-                <Calendar className="size-3.5" />
-                <span>{dateStr}</span>
+
+            <div className="space-y-2.5 mt-2">
+              <div className="flex items-center gap-4 text-xs font-medium text-muted-foreground">
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <Calendar className="size-3.5 text-primary/70" />
+                  <span>{dateStr}</span>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0 border-l pl-4">
+                  <Clock className="size-3.5 text-primary/70" />
+                  <span>{timeStr}</span>
+                </div>
               </div>
-              <div className="flex items-center gap-1.5">
-                <Clock className="size-3.5" />
-                <span>{timeStr}</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <MapPin className="size-3.5" />
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <MapPin className="size-3.5 text-primary/70 shrink-0" />
                 <span className="truncate">{ticket.event.location}</span>
               </div>
             </div>
           </div>
 
-          {/* QR */}
-          <div className="shrink-0 flex flex-col items-center gap-1">
-            <div className="bg-white p-1.5 rounded-md">
-              <QRCodeSVG value={ticket.id} size={48} />
-            </div>
-            <p className="text-[10px] text-muted-foreground">
-              Qty: {ticket.qty}
-            </p>
+          {/* Far Right: QR Peek */}
+          <div className="w-16 border-l border-dashed flex flex-col items-center justify-center bg-muted/20 group-hover:bg-primary/5 transition-colors p-2 shrink-0">
+            <QrCode className="size-6 text-muted-foreground/40 group-hover:text-primary/60 transition-colors mb-1" />
+            <span className="text-[8px] font-bold text-muted-foreground/60 group-hover:text-primary/60 uppercase tracking-tighter">
+              View Code
+            </span>
           </div>
-        </CardContent>
+        </div>
       </Card>
-    </button>
+    </motion.button>
   );
 }

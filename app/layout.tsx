@@ -6,6 +6,8 @@ import { Providers } from "@/components/providers";
 import NextTopLoader from "nextjs-toploader";
 import { AnchoredToastProvider, ToastProvider } from "@/components/ui/toast";
 
+import { AnimatePresence, motion } from "framer-motion";
+
 export const metadata: Metadata = {
   title: "City",
   description: "Modern event platform",
@@ -45,7 +47,9 @@ export default function RootLayout({
               <AnchoredToastProvider>
                 <NextTopLoader showSpinner={false} />
                 <Navbar />
-                <div className="min-h-screen max-w-5xl mx-auto">{children}</div>
+                <main className="min-h-screen max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                  {children}
+                </main>
               </AnchoredToastProvider>
             </ToastProvider>
           </ThemeProvider>
