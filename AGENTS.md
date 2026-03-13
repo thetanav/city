@@ -2,6 +2,7 @@
 
 - never spin up dev server untill told
 - large comments
+- dont use the too many card components infact limit it
 
 # DOs
 

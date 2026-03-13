@@ -5,6 +5,7 @@ import {
   Check,
   Image as ImageIcon,
   Loader,
+  Lock,
   Plus,
   Trash2,
   X,
@@ -13,15 +14,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { api } from "@/lib/eden";
@@ -36,6 +29,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toastManager } from "@/components/ui/toast";
+import TimeForm from "@/components/timeform";
 
 type Tier = {
   id: string;
@@ -73,8 +67,8 @@ export default function EventCreator() {
   const [location, setLocation] = React.useState("");
   const [contactEmail, setContactEmail] = React.useState("");
   const [startAt, setStartAt] = React.useState("");
-  const [endAt, setEndAt] = React.useState("");
   const [hasEndDate, setHasEndDate] = React.useState(true);
+  const [endAt, setEndAt] = React.useState("");
 
   const [slug, setSlug] = React.useState("");
   const [slugTouched, setSlugTouched] = React.useState(false);
@@ -127,6 +121,61 @@ export default function EventCreator() {
       .map((t) => Number(t.price))
       .filter((n) => Number.isFinite(n) && n >= 0),
   );
+  const parsedStartAt = startAt ? new Date(startAt) : null;
+  const parsedEndAt = endAt ? new Date(endAt) : null;
+  const hasStartDate = Boolean(startAt);
+  const hasRequiredBasics =
+    title.trim().length > 0 &&
+    description.trim().length > 0 &&
+    location.trim().length > 0;
+  const tiersHaveValidValues = tiers.every((tier) => {
+    const price = Number(tier.price);
+    const seats = Number(tier.seats);
+
+    return (
+      tier.name.trim().length > 0 &&
+      Number.isFinite(price) &&
+      price >= 0 &&
+      Number.isFinite(seats) &&
+      seats > 0
+    );
+  });
+  const hasValidEndDate =
+    !hasEndDate ||
+    (Boolean(endAt) &&
+      Boolean(parsedStartAt) &&
+      Boolean(parsedEndAt) &&
+      parsedEndAt!.getTime() >= parsedStartAt!.getTime());
+  const canSubmit =
+    hasRequiredBasics &&
+    hasStartDate &&
+    hasValidEndDate &&
+    slugOk &&
+    slug.length > 0 &&
+    !slugExists &&
+    !slugQuery.isLoading &&
+    tiers.length > 0 &&
+    tiersHaveValidValues;
+
+  const completionChecks = [
+    { label: "Basics", done: hasRequiredBasics },
+    { label: "Schedule", done: hasStartDate && hasValidEndDate },
+    { label: "Slug", done: slug.length > 0 && slugOk && !slugExists },
+    { label: "Tickets", done: tiers.length > 0 && tiersHaveValidValues },
+  ];
+  const completedCount = completionChecks.filter((check) => check.done).length;
+
+  const submitHint = (() => {
+    if (!hasRequiredBasics) return "Fill title, description, and location.";
+    if (!hasStartDate) return "Pick a start date to continue.";
+    if (!hasValidEndDate) return "End must be later than start.";
+    if (!slug.length || !slugOk) return "Enter a valid slug.";
+    if (slugExists) return "Slug is already taken.";
+    if (!tiers.length || !tiersHaveValidValues)
+      return "Complete all tier name, price, and seats fields.";
+
+    return "Looks good. Ready to create event.";
+  })();
 
   function onAddTier() {
     setTiers((prev) => [
@@ -201,16 +250,17 @@ export default function EventCreator() {
 
       <form
         onSubmit={(e) => e.preventDefault()}
-        className="grid gap-6 lg:grid-cols-[1.25fr_.85fr]"
-      >
+        className="grid gap-6 lg:grid-cols-[1.25fr_.85fr]">
         <div className="grid gap-6">
           {/* Event Details */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Event details</CardTitle>
-              <CardDescription>The basics people see first.</CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-7">
+          <section className="rounded-xl border bg-background p-5 sm:p-6">
+            <div className="mb-5 space-y-1">
+              <h2 className="text-lg font-semibold tracking-tight">Event details</h2>
+              <p className="text-sm text-muted-foreground">
+                The basics people see first.
+              </p>
+            </div>
+            <div className="grid gap-7">
               <div className="grid gap-2">
                 <Label htmlFor="status">Status</Label>
                 <div>
@@ -220,8 +270,7 @@ export default function EventCreator() {
                     items={statusList}
                     onValueChange={(value) => {
                       setStatus(value as EventStatus);
-                    }}
-                  >
+                    }}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -245,6 +294,9 @@ export default function EventCreator() {
                   autoComplete="off"
                   required
                 />
+                <p className="text-xs text-muted-foreground">
+                  Keep it short and memorable.
+                </p>
               </div>
 
               <div className="grid gap-2">
@@ -269,42 +321,21 @@ export default function EventCreator() {
                   placeholder="What is it? Who is it for?"
                   className="font-mono"
                   rows={6}
+                  required
                 />
+                <p className="text-xs text-muted-foreground">
+                  Include highlights, timing, and what attendees should expect.
+                </p>
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="grid gap-2">
-                  <Label htmlFor="startAt">Start</Label>
-                  <Input
-                    id="startAt"
-                    type="datetime-local"
-                    value={startAt}
-                    onChange={(e) => setStartAt(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <div className="flex items-center justify-between gap-3">
-                    <Label htmlFor="endAt">End</Label>
-                    <label className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <Checkbox
-                        checked={hasEndDate}
-                        onCheckedChange={(value) =>
-                          setHasEndDate(value === true)
-                        }
-                      />
-                      Has end date
-                    </label>
-                  </div>
-                  <Input
-                    id="endAt"
-                    type="datetime-local"
-                    value={endAt}
-                    onChange={(e) => setEndAt(e.target.value)}
-                    disabled={!hasEndDate}
-                  />
-                </div>
-              </div>
+              <TimeForm
+                startAt={startAt}
+                endAt={endAt}
+                hasEndDate={hasEndDate}
+                onStartAtChange={setStartAt}
+                onEndAtChange={setEndAt}
+                onHasEndDateChange={setHasEndDate}
+              />
 
               <div className="grid gap-2">
                 <Label htmlFor="location">Location</Label>
@@ -316,6 +347,9 @@ export default function EventCreator() {
                   autoComplete="off"
                   required
                 />
+                <p className="text-xs text-muted-foreground">
+                  Add venue name and area for faster discovery.
+                </p>
               </div>
 
               <div className="grid gap-2">
@@ -329,18 +363,20 @@ export default function EventCreator() {
                   autoComplete="email"
                 />
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </section>
 
           {/* Slug */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Event URL slug</CardTitle>
-              <CardDescription>
+          <section className="rounded-xl border bg-background p-5 sm:p-6">
+            <div className="mb-5 space-y-1">
+              <h2 className="text-lg font-semibold tracking-tight">
+                Event URL slug
+              </h2>
+              <p className="text-sm text-muted-foreground">
                 Lowercase letters, numbers, and hyphens.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-2">
+              </p>
+            </div>
+            <div className="grid gap-2">
               <Label htmlFor="slug">Slug</Label>
               <div className="relative">
                 <span className="pointer-events-none absolute left-5 top-1/2 -translate-y-1/2 select-none text-sm font-mono text-muted-foreground z-10">
@@ -359,6 +395,7 @@ export default function EventCreator() {
                   )}
                   placeholder="night-market-sessions"
                   autoComplete="off"
+                  required
                 />
                 <div className="pointer-events-none absolute right-5 top-1/2 -translate-y-1/2 select-none text-xs text-muted-foreground z-10">
                   {slugQuery.isLoading ? (
@@ -383,79 +420,85 @@ export default function EventCreator() {
                     one.
                   </li>
                 )}
+                {slugQuery.isLoading && slug.length >= 3 && slugOk && (
+                  <li className="text-xs text-muted-foreground">
+                    Checking slug availability...
+                  </li>
+                )}
               </ul>
-            </CardContent>
-          </Card>
+            </div>
+          </section>
 
           {/* Price Tiers */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Price tiers</CardTitle>
-              <CardDescription>
+          <section className="rounded-xl border bg-background p-5 sm:p-6">
+            <div className="mb-5 space-y-1">
+              <h2 className="text-lg font-semibold tracking-tight">Price tiers</h2>
+              <p className="text-sm text-muted-foreground">
                 Set prices and cap seats for each tier.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-4">
+              </p>
+            </div>
+            <div className="grid gap-4">
               <div className="grid gap-3">
                 {tiers.map((tier) => (
-                  <div key={tier.id} className="rounded-lg border p-4">
-                    <div className="grid gap-3 sm:grid-cols-[1.2fr_.7fr_.7fr_auto] sm:items-end">
-                      <div className="grid gap-2">
-                        <Label className="text-xs text-muted-foreground">
-                          Tier name
-                        </Label>
-                        <Input
-                          value={tier.name}
-                          onChange={(e) =>
-                            onUpdateTier(tier.id, { name: e.target.value })
-                          }
-                          placeholder="General"
-                          autoComplete="off"
-                        />
-                      </div>
-                      <div className="grid gap-2">
-                        <Label className="text-xs text-muted-foreground">
-                          Price
-                        </Label>
-                        <Input
-                          value={tier.price}
-                          onChange={(e) =>
-                            onUpdateTier(tier.id, {
-                              price: e.target.value.replace(/[^0-9.]/g, ""),
-                            })
-                          }
-                          inputMode="decimal"
-                          placeholder="25"
-                          autoComplete="off"
-                        />
-                      </div>
-                      <div className="grid gap-2">
-                        <Label className="text-xs text-muted-foreground">
-                          Seats
-                        </Label>
-                        <Input
-                          value={tier.seats}
-                          onChange={(e) =>
-                            onUpdateTier(tier.id, {
-                              seats: e.target.value.replace(/[^0-9]/g, ""),
-                            })
-                          }
-                          inputMode="numeric"
-                          placeholder="120"
-                          autoComplete="off"
-                        />
-                      </div>
-                      <div className="flex justify-end">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="icon"
-                          onClick={() => onRemoveTier(tier.id)}
-                          aria-label="Remove tier"
-                        >
-                          <Trash2 className="size-4" />
-                        </Button>
-                      </div>
+                  <div className="grid gap-2 sm:grid-cols-[1.2fr_.7fr_.7fr_auto] sm:items-end">
+                    <div>
+                      <Label className="text-xs text-muted-foreground">
+                        Tier name
+                      </Label>
+                      <Input
+                        value={tier.name}
+                        onChange={(e) =>
+                          onUpdateTier(tier.id, { name: e.target.value })
+                        }
+                        placeholder="General"
+                        autoComplete="off"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">
+                        Price (₹)
+                      </Label>
+                      <Input
+                        value={tier.price}
+                        onChange={(e) =>
+                          onUpdateTier(tier.id, {
+                            price: e.target.value.replace(/[^0-9.]/g, ""),
+                          })
+                        }
+                        inputMode="decimal"
+                        placeholder="25"
+                        autoComplete="off"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">
+                        Seats
+                      </Label>
+                      <Input
+                        value={tier.seats}
+                        onChange={(e) =>
+                          onUpdateTier(tier.id, {
+                            seats: e.target.value.replace(/[^0-9]/g, ""),
+                          })
+                        }
+                        inputMode="numeric"
+                        placeholder="120"
+                        autoComplete="off"
+                        required
+                      />
+                    </div>
+                    <div className="flex justify-end">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={() => onRemoveTier(tier.id)}
+                        disabled={tiers.length === 1}
+                        aria-label="Remove tier">
+                        <Trash2 className="size-4" />
+                      </Button>
                     </div>
                   </div>
                 ))}
@@ -481,23 +524,71 @@ export default function EventCreator() {
                   ) : null}
                 </p>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </section>
         </div>
 
         {/* Sidebar */}
         <div className="grid content-start gap-6">
-          <Card className="sticky top-20">
-            <CardHeader>
-              <CardTitle>Cover image</CardTitle>
-              <CardDescription>Paste an image URL.</CardDescription>
-            </CardHeader>
-            <CardContent>
+          <section className="rounded-xl border bg-background p-5 sm:p-6">
+            <div className="mb-5 space-y-1">
+              <h2 className="flex items-center justify-between gap-2 text-lg font-semibold tracking-tight">
+                Form progress
+                <Badge
+                  variant={
+                    completedCount === completionChecks.length
+                      ? "success"
+                      : "info"
+                }>
+                  {completedCount}/{completionChecks.length}
+                </Badge>
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Complete all checks to unlock event creation.
+              </p>
+            </div>
+            <div className="grid gap-2">
+              {completionChecks.map((check) => (
+                <div
+                  key={check.label}
+                  className="flex items-center justify-between rounded-md border px-3 py-2">
+                  <p className="text-sm">{check.label}</p>
+                  {check.done ? (
+                    <Badge variant="success">Done</Badge>
+                  ) : (
+                    <Badge variant="outline">Pending</Badge>
+                  )}
+                </div>
+              ))}
+              <p
+                className={cn(
+                  "text-xs",
+                  canSubmit ? "text-emerald-600" : "text-muted-foreground",
+                )}>
+                {canSubmit ? (
+                  "All required details are complete."
+                ) : (
+                  <>
+                    <Lock className="mr-1 inline size-3" />
+                    {submitHint}
+                  </>
+                )}
+              </p>
+            </div>
+          </section>
+
+          <section className="sticky top-20 rounded-xl border bg-background p-5 sm:p-6">
+            <div className="mb-5 space-y-1">
+              <h2 className="text-lg font-semibold tracking-tight">Cover image</h2>
+              <p className="text-sm text-muted-foreground">Paste an image URL.</p>
+            </div>
+            <div>
               <div className="grid gap-3">
                 <div className="grid gap-2">
                   <Label htmlFor="coverUrl">Image URL</Label>
                   <Input
                     id="coverUrl"
+                    type="url"
                     value={coverUrl}
                     onChange={(e) => setCoverUrl(e.target.value)}
                     placeholder="https://images.example.com/cover.jpg"
@@ -534,24 +625,22 @@ export default function EventCreator() {
                     variant="outline"
                     size="sm"
                     onClick={() => setCoverUrl("")}
-                    disabled={!coverUrl.trim()}
-                  >
+                    disabled={!coverUrl.trim()}>
                     Clear
                   </Button>
                 </div>
               </div>
-            </CardContent>
-            <CardFooter className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+            </div>
+            <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:justify-end">
               <Button
                 type="submit"
                 className="w-full sm:w-auto"
-                // disabled={!canSubmit}
-                onClick={() => mutate()}
-              >
+                disabled={!canSubmit || isPending}
+                onClick={() => mutate()}>
                 {isPending ? "Creating..." : "Create event"}
               </Button>
-            </CardFooter>
-          </Card>
+            </div>
+          </section>
         </div>
       </form>
     </div>
