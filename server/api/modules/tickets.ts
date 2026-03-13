@@ -110,7 +110,7 @@ export const ticketsRoutes = new Elysia({ prefix: "/tickets" })
           data: { valid: body.valid },
           include: { event: true },
         });
-        return { ok: false, data: updated };
+        return { ok: true, data: updated };
       } catch (error: unknown) {
         if (
           typeof error === "object" &&

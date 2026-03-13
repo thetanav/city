@@ -4,8 +4,13 @@ import { prisma } from "@/lib/prisma";
 import { stripeClient } from "@/lib/stripe";
 import type Stripe from "stripe";
 import { rateLimit } from "elysia-rate-limit";
-
-// TODO: fix the tier type here and all over the project
+import {
+  calculateServiceFeeMinor,
+  normalizeEventTiers,
+  TICKET_CURRENCY,
+  toMinorUnits,
+} from "@/lib/ticketing";
+import type { NormalizedEventTier, TierSelection } from "@/types/tier";
 
 const checkoutSchema = t.Object({
   eventId: t.String(),
@@ -18,47 +23,20 @@ const checkoutSchema = t.Object({
   ),
 });
 
-type TierSelection = {
-  id: string;
-  name: string;
-  qty: number;
-};
-
-type RawTier = {
-  id?: string;
-  name?: string;
-  price?: number;
-  seats?: number;
-};
-
-function normalizePrices(prices: unknown) {
-  if (!Array.isArray(prices)) return [] as RawTier[];
-  return prices as RawTier[];
-}
-
-function formatTierName(tier: RawTier, fallback: string) {
-  return typeof tier.name === "string" && tier.name.trim() !== ""
-    ? tier.name
-    : fallback;
-}
-
-function getTierPrice(tier: RawTier) {
-  return typeof tier.price === "number" && Number.isFinite(tier.price)
-    ? tier.price
-    : 0;
-}
-
-function assertSelections(selections: TierSelection[], tiers: RawTier[]) {
+function assertSelections(
+  selections: TierSelection[],
+  tiers: NormalizedEventTier[],
+) {
   const errors: string[] = [];
   const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [];
   let subtotalCents = 0;
-  const tierById = new Map<string, RawTier>();
-  const tierByName = new Map<string, RawTier>();
+  const tierById = new Map<string, NormalizedEventTier>();
+  const tierByName = new Map<string, NormalizedEventTier>();
   const nameCounts = new Map<string, number>();
 
   tiers.forEach((tier) => {
-    if (tier.id) tierById.set(tier.id, tier);
-    const nameKey = typeof tier.name === "string" ? tier.name.trim() : "";
+    tierById.set(tier.id, tier);
+    const nameKey = tier.name.trim();
     if (!nameKey) return;
     nameCounts.set(nameKey, (nameCounts.get(nameKey) ?? 0) + 1);
     if (!tierByName.has(nameKey)) tierByName.set(nameKey, tier);
@@ -85,13 +63,12 @@ function assertSelections(selections: TierSelection[], tiers: RawTier[]) {
     }
 
     const availableSeats =
-      typeof matchingTier.seats === "number" &&
-      Number.isFinite(matchingTier.seats)
+      typeof matchingTier.seats === "number" && Number.isFinite(matchingTier.seats)
         ? matchingTier.seats
         : 0;
 
     if (qty > availableSeats) {
-      const name = formatTierName(matchingTier, selection.name);
+      const name = matchingTier.name || selection.name;
       errors.push(
         availableSeats <= 0
           ? `${name} is sold out`
@@ -100,9 +77,8 @@ function assertSelections(selections: TierSelection[], tiers: RawTier[]) {
       return;
     }
 
-    const unitPrice = getTierPrice(matchingTier);
-    const name = formatTierName(matchingTier, selection.name);
-    const unitAmount = Math.round(unitPrice * 100);
+    const name = matchingTier.name || selection.name;
+    const unitAmount = toMinorUnits(matchingTier.price);
 
     if (unitAmount < 0) {
       errors.push(`Invalid price for ${name}`);
@@ -114,13 +90,13 @@ function assertSelections(selections: TierSelection[], tiers: RawTier[]) {
     lineItems.push({
       quantity: qty,
       price_data: {
-        currency: "inr",
+        currency: TICKET_CURRENCY.toLowerCase(),
         unit_amount: unitAmount,
         product_data: {
           name,
           metadata: {
             type: "ticket",
-            tierId: matchingTier.id ?? selection.id,
+            tierId: matchingTier.id,
           },
         },
       },
@@ -154,7 +130,7 @@ export const paymentsRoutes = new Elysia({ prefix: "/payments" })
         return { ok: false, message: "Event is not accepting purchases!" };
       }
 
-      const tiers = normalizePrices(event.prices);
+      const tiers = normalizeEventTiers(event.prices, 0);
       const selections = body.tiers.filter((tier) => tier.qty > 0);
       const { errors, lineItems, subtotalCents } = assertSelections(
         selections,
@@ -169,16 +145,13 @@ export const paymentsRoutes = new Elysia({ prefix: "/payments" })
         return { ok: false, message: "No ticket selections!" };
       }
 
-      const feeCents = Math.min(
-        500,
-        Math.max(0, Math.round(subtotalCents * 0.02)),
-      );
+      const feeCents = calculateServiceFeeMinor(subtotalCents);
 
       if (feeCents > 0) {
         lineItems.push({
           quantity: 1,
           price_data: {
-            currency: "inr",
+            currency: TICKET_CURRENCY.toLowerCase(),
             unit_amount: feeCents,
             product_data: {
               name: "Service fee",

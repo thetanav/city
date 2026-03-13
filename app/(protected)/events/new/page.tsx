@@ -25,6 +25,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { api } from "@/lib/eden";
+import { formatMoney } from "@/lib/ticketing";
 import { cn } from "@/lib/utils";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -61,18 +62,6 @@ function isValidSlug(slug: string) {
 
 function uid() {
   return Math.random().toString(16).slice(2) + Date.now().toString(16);
-}
-
-function apiErrorMessage(value: unknown, fallback: string): string {
-  if (
-    typeof value === "object" &&
-    value !== null &&
-    "message" in value &&
-    typeof (value as { message?: unknown }).message === "string"
-  ) {
-    return (value as { message: string }).message;
-  }
-  return fallback;
 }
 
 export default function EventCreator() {
@@ -158,9 +147,11 @@ export default function EventCreator() {
     mutationFn: async () => {
       const normalizedDescription = description.replace(/\r\n/g, "\n");
       const prices = tiers.map((tier) => ({
+        id: tier.id,
         name: tier.name || "General",
         price: Number(tier.price) || 0,
         seats: Number(tier.seats) || 0,
+        note: tier.note.trim() || undefined,
       }));
 
       const { data } = await api.events.post({
@@ -199,16 +190,6 @@ export default function EventCreator() {
     { label: "Available for buyers", value: "LIVE" },
     { label: "Stopped for buyers", value: "STOPPED" },
   ];
-
-  const canSubmit =
-    title.trim().length > 0 &&
-    slug.length > 0 &&
-    slugOk &&
-    !slugExists &&
-    startAt.length > 0 &&
-    location.trim().length > 0 &&
-    tiers.length > 0 &&
-    !isPending;
 
   return (
     <div>
@@ -494,7 +475,7 @@ export default function EventCreator() {
                     <span className="ml-3">
                       From{" "}
                       <span className="font-medium text-foreground">
-                        ${minPrice}
+                        {formatMoney(minPrice)}
                       </span>
                     </span>
                   ) : null}

@@ -11,9 +11,16 @@ import {
 import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { signIn } from "@/lib/auth-client";
+import { useSearchParams } from "next/navigation";
 
 export default function SignIn() {
   const [loading, setLoading] = useState(false);
+  const searchParams = useSearchParams();
+  const next = searchParams.get("next");
+  const callbackURL =
+    next && next.startsWith("/") && !next.startsWith("//")
+      ? next
+      : "/dashboard";
 
   return (
     <Card className="max-w-md">
@@ -31,7 +38,7 @@ export default function SignIn() {
           onClick={async () => {
             await signIn.social({
               provider: "google",
-              callbackURL: "/dashboard",
+              callbackURL,
               fetchOptions: {
                 onRequest: () => {
                   setLoading(true);

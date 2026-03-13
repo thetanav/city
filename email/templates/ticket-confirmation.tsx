@@ -1,4 +1,5 @@
 import React from "react";
+import { formatMinorMoney } from "@/lib/ticketing";
 
 type TicketLineItem = {
   tierName: string;
@@ -16,14 +17,6 @@ export type TicketConfirmationEmailProps = {
   totalAmount: number;
   dashboardUrl: string;
 };
-
-function formatMoney(cents: number) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 2,
-  }).format(cents / 100);
-}
 
 function formatDate(dateStr: string) {
   return new Intl.DateTimeFormat("en-US", {
@@ -143,7 +136,7 @@ export function TicketConfirmationEmail({
                             fontSize: 13,
                           }}
                         >
-                          {formatMoney(ticket.qty * ticket.unitPrice)}
+                          {formatMinorMoney(ticket.qty * ticket.unitPrice)}
                         </td>
                       </tr>
                     ))}
@@ -159,7 +152,7 @@ export function TicketConfirmationEmail({
                           fontWeight: 600,
                         }}
                       >
-                        {formatMoney(totalAmount)}
+                        {formatMinorMoney(totalAmount)}
                       </td>
                     </tr>
                   </tbody>

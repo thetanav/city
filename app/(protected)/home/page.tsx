@@ -22,6 +22,7 @@ export default async function Page() {
       event: {
         select: {
           id: true,
+          slug: true,
           title: true,
           startDate: true,
           location: true,
@@ -39,6 +40,7 @@ export default async function Page() {
     valid: ticket.valid,
     event: {
       id: ticket.event.id,
+      slug: ticket.event.slug,
       title: ticket.event.title,
       startDate: ticket.event.startDate.toISOString(),
       location: ticket.event.location,

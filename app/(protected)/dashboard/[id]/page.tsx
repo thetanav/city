@@ -1,8 +1,7 @@
 "use client";
 
 import { Badge } from "@/components/ui/badge";
-import { Card, CardHeader, CardPanel } from "@/components/ui/card";
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { use, useState } from "react";
 import { api } from "@/lib/eden";
 import { notFound } from "next/navigation";
@@ -25,7 +24,6 @@ import {
 import {
   ArrowDown01,
   ArrowDown10,
-  CreditCard,
   Hammer,
   MoreVertical,
   Search,
@@ -36,20 +34,30 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@/components/ui/menu";
 import { Checkbox } from "@/components/ui/checkbox";
+import { formatMinorMoney } from "@/lib/ticketing";
+import { toastManager } from "@/components/ui/toast";
 
 type TicketSortField = "purchased" | "qty" | "totalPrice" | "status" | "tier";
 type TicketSortOrder = "asc" | "dsc";
 
-function formatMoney(value: number) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: value % 1 === 0 ? 0 : 2,
-  }).format(value);
+function apiErrorMessage(value: unknown, fallback: string) {
+  if (
+    typeof value === "object" &&
+    value !== null &&
+    "message" in value &&
+    typeof (value as { message?: unknown }).message === "string"
+  ) {
+    return (value as { message: string }).message;
+  }
+
+  return fallback;
 }
 
-function formatDate(value: Date) {
-  return value.toLocaleString(undefined, {
+function formatDate(value: string | Date) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+
+  return date.toLocaleString(undefined, {
     month: "short",
     day: "numeric",
     hour: "numeric",
@@ -88,6 +96,7 @@ function TicketTableSkeleton() {
 
 export default function Page({ params }: { params: Promise<{ id: string }> }) {
   const { id: slug } = use(params);
+  const queryClient = useQueryClient();
 
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(0);
@@ -144,6 +153,87 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
     },
   });
 
+  const updateTicketMutation = useMutation({
+    mutationFn: async ({
+      id,
+      valid,
+    }: {
+      id: string;
+      valid: boolean;
+    }) => {
+      const { data, error } = await api.tickets({ id }).put({ valid });
+
+      if (error) {
+        throw new Error(
+          apiErrorMessage(error.value, "Failed to update ticket status"),
+        );
+      }
+
+      if (!data?.ok) {
+        throw new Error(apiErrorMessage(data, "Failed to update ticket status"));
+      }
+
+      return { id, valid };
+    },
+    onSuccess: ({ valid }) => {
+      queryClient.invalidateQueries({ queryKey: ["dashboard", slug] });
+      toastManager.add({
+        title: valid ? "Ticket enabled" : "Ticket invalidated",
+        type: "success",
+      });
+    },
+    onError: (error) => {
+      toastManager.add({
+        title:
+          error instanceof Error ? error.message : "Failed to update ticket status",
+        type: "error",
+      });
+    },
+  });
+
+  const bulkInvalidateMutation = useMutation({
+    mutationFn: async (ids: string[]) => {
+      const results = await Promise.all(
+        ids.map(async (id) => {
+          const { data, error } = await api.tickets({ id }).put({ valid: false });
+
+          if (error) {
+            throw new Error(
+              apiErrorMessage(error.value, "Failed to invalidate selected tickets"),
+            );
+          }
+
+          if (!data?.ok) {
+            throw new Error(
+              apiErrorMessage(data, "Failed to invalidate selected tickets"),
+            );
+          }
+
+          return id;
+        }),
+      );
+
+      return results;
+    },
+    onSuccess: (ids) => {
+      setSelected((current) => current.filter((id) => !ids.includes(id)));
+      queryClient.invalidateQueries({ queryKey: ["dashboard", slug] });
+      toastManager.add({
+        title: `Invalidated ${ids.length} ticket${ids.length === 1 ? "" : "s"}`,
+        type: "success",
+      });
+    },
+    onError: (error) => {
+      toastManager.add({
+        title:
+          error instanceof Error
+            ? error.message
+            : "Failed to invalidate selected tickets",
+        type: "error",
+      });
+    },
+  });
+
   if (tickets && !tickets.ok) return notFound();
 
   const soldCount = tickets?.totalCount ?? 0;
@@ -152,6 +242,12 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
   const soldPercent = tickets?.soldPercentage ?? 0;
   const avgTicketPrice = tickets?.avgTicketPrice ?? 0;
   const invalidEntries = tickets?.invalidEntries ?? 0;
+  const visibleTicketIds = tickets?.data?.map((ticket) => ticket.id) ?? [];
+  const selectedVisibleCount = selected.filter((id) =>
+    visibleTicketIds.includes(id),
+  ).length;
+  const allVisibleSelected =
+    visibleTicketIds.length > 0 && selectedVisibleCount === visibleTicketIds.length;
 
   return (
     <div className="space-y-6">
@@ -186,7 +282,7 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
           </p>
           <p>
             <span className="text-muted-foreground">Avg price:</span>{" "}
-            <span className="font-medium">{formatMoney(avgTicketPrice)}</span>
+            <span className="font-medium">{formatMinorMoney(avgTicketPrice)}</span>
           </p>
           <p>
             <span className="text-muted-foreground">Sold:</span>{" "}
@@ -231,7 +327,7 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
       ) : (
         <div>
           <section>
-            {tickets?.totalCount === 0 ? (
+            {tickets?.data?.length === 0 ? (
               <p className="text-sm text-muted-foreground">
                 No tickets sold yet.
               </p>
@@ -243,10 +339,24 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
                       <TableHead className="py-3 pr-0 font-medium">
                         <Checkbox
                           checked={
-                            selected.length > 0 ? "indeterminate" : false
+                            selectedVisibleCount === 0
+                              ? false
+                              : allVisibleSelected
+                                ? true
+                                : "indeterminate"
                           }
-                          onClick={() => {
-                            setSelected([]);
+                          onCheckedChange={(value) => {
+                            setSelected((current) => {
+                              const otherIds = current.filter(
+                                (id) => !visibleTicketIds.includes(id),
+                              );
+
+                              if (value === true) {
+                                return [...otherIds, ...visibleTicketIds];
+                              }
+
+                              return otherIds;
+                            });
                           }}
                           className="cursor-pointer"
                         />
@@ -310,25 +420,29 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
                           <MenuTrigger
                             render={
                               <Button
-                                variant={"outline"}
+                                variant="outline"
                                 size="icon-sm"
-                                className={`${
-                                  selected.length == 0 &&
-                                  "opacity-60 pointer-events-none"
-                                }`}
+                                disabled={
+                                  selectedVisibleCount === 0 ||
+                                  bulkInvalidateMutation.isPending
+                                }
                               >
                                 <MoreVertical />
                               </Button>
                             }
                           />
                           <MenuPopup align="start" sideOffset={4}>
-                            <MenuItem>
+                            <MenuItem
+                              onClick={() => {
+                                if (selectedVisibleCount === 0) return;
+                                const ids = selected.filter((id) =>
+                                  visibleTicketIds.includes(id),
+                                );
+                                void bulkInvalidateMutation.mutateAsync(ids);
+                              }}
+                            >
                               <Hammer />
-                              Invalid them all
-                            </MenuItem>
-                            <MenuItem>
-                              <CreditCard />
-                              Process Refund
+                              Invalidate selected
                             </MenuItem>
                           </MenuPopup>
                         </Menu>
@@ -378,10 +492,10 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
                             {ticket.qty}
                           </TableCell>
                           <TableCell className="py-3 pr-4">
-                            {formatMoney(ticket.unitPrice)}
+                            {formatMinorMoney(ticket.unitPrice)}
                           </TableCell>
                           <TableCell className="py-3 pr-4">
-                            {formatMoney(ticket.qty * ticket.unitPrice)}
+                            {formatMinorMoney(ticket.qty * ticket.unitPrice)}
                           </TableCell>
                           <TableCell className="py-3 pr-4">
                             <Badge
@@ -398,19 +512,26 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
                             <Menu>
                               <MenuTrigger
                                 render={
-                                  <Button variant={"outline"} size="icon-sm">
+                                  <Button
+                                    variant="outline"
+                                    size="icon-sm"
+                                    disabled={updateTicketMutation.isPending}
+                                  >
                                     <MoreVertical />
                                   </Button>
                                 }
                               />
                               <MenuPopup align="start" sideOffset={4}>
-                                <MenuItem>
+                                <MenuItem
+                                  onClick={() => {
+                                    void updateTicketMutation.mutateAsync({
+                                      id: ticket.id,
+                                      valid: !ticket.valid,
+                                    });
+                                  }}
+                                >
                                   <Hammer />
-                                  {ticket.valid ? "Disble" : "Enable"}
-                                </MenuItem>
-                                <MenuItem>
-                                  <CreditCard />
-                                  Process Refund
+                                  {ticket.valid ? "Disable" : "Enable"}
                                 </MenuItem>
                               </MenuPopup>
                             </Menu>

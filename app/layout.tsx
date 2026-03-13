@@ -36,7 +36,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className="antialiased">
+      <body className="antialiased min-h-screen bg-background">
         <Providers>
           <ThemeProvider
             attribute="class"
@@ -47,7 +47,7 @@ export default function RootLayout({
               <AnchoredToastProvider>
                 <NextTopLoader showSpinner={false} />
                 <Navbar />
-                <main className="min-h-screen max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                <main className="max-w-5xl h-full mx-auto px-4 sm:px-6 lg:px-8">
                   {children}
                 </main>
               </AnchoredToastProvider>

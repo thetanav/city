@@ -13,23 +13,10 @@ import {
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import Link from "next/link";
-import { motion, AnimatePresence, Variants } from "framer-motion";
+import { motion, Variants } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
-import { AspectRatio } from "@/components/ui/aspect-ratio";
+import { Card, CardContent } from "@/components/ui/card";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 
 type TicketData = {
@@ -40,11 +27,18 @@ type TicketData = {
   valid?: boolean | null;
   event: {
     id: string;
+    slug: string;
     title: string;
     startDate: string;
     location: string;
     posterImage: string | null;
   };
+};
+
+type HomePageUser = {
+  name: string;
+  email?: string | null;
+  image?: string | null;
 };
 
 const container: Variants = {
@@ -66,7 +60,7 @@ export default function HomePage({
   user,
   tickets,
 }: {
-  user: any;
+  user: HomePageUser | null;
   tickets: TicketData[];
 }) {
   const [activeTicket, setActiveTicket] = React.useState<TicketData | null>(null);
@@ -121,7 +115,7 @@ export default function HomePage({
             Member Dashboard
           </Badge>
           <h1 className="text-4xl font-bold tracking-tight">
-            Hey, {user.name.split(' ')[0]} 👋
+            Hey, {user.name.split(" ")[0]} 👋
           </h1>
           <p className="text-muted-foreground text-lg">
             You have {tickets.length} upcoming {tickets.length === 1 ? 'experience' : 'experiences'}.
@@ -305,7 +299,10 @@ export default function HomePage({
                     >
                       Close
                     </Button>
-                    <Link href={`/e/${activeTicket.event.id}`} className="flex-1">
+                    <Link
+                      href={`/e/${activeTicket.event.slug}`}
+                      className="flex-1"
+                    >
                       <Button className="w-full gap-2">
                         Event Page <ExternalLink className="size-3" />
                       </Button>

@@ -2,6 +2,7 @@ import { Elysia, t } from "elysia";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { rateLimit } from "elysia-rate-limit";
+import { totalSeatsFromTiers } from "@/lib/ticketing";
 
 type TicketSortField = "qty" | "totalPrice" | "purchased" | "status" | "tier";
 type TicketSortOrder = "asc" | "desc" | "dsc";
@@ -25,15 +26,6 @@ function resolveTicketOrderBy(
     default:
       return { createdAt: direction };
   }
-}
-
-function totalSeatsFromPrices(prices: unknown) {
-  if (!Array.isArray(prices)) return 0;
-  return prices.reduce((sum, tier) => {
-    if (!tier || typeof tier !== "object") return sum;
-    const seats = Number((tier as { seats?: number }).seats ?? 0);
-    return sum + (Number.isFinite(seats) ? seats : 0);
-  }, 0);
 }
 
 const tierSchema = t.Object({
@@ -130,7 +122,7 @@ export const eventsRoutes = new Elysia({ prefix: "/events" })
       }
 
       const totalTickets =
-        body.totalTickets ?? totalSeatsFromPrices(body.prices);
+        body.totalTickets ?? totalSeatsFromTiers(body.prices);
 
       try {
         const event = await prisma.event.create({
@@ -251,7 +243,7 @@ export const eventsRoutes = new Elysia({ prefix: "/events" })
       if (body.prices !== undefined) {
         updateData.prices = body.prices;
         updateData.totalTickets =
-          body.totalTickets ?? totalSeatsFromPrices(body.prices);
+          body.totalTickets ?? totalSeatsFromTiers(body.prices);
       } else if (body.totalTickets !== undefined) {
         updateData.totalTickets = body.totalTickets;
       }
@@ -381,12 +373,20 @@ export const eventsRoutes = new Elysia({ prefix: "/events" })
   )
   .get(
     "/slug/:slug",
-    async ({ params }) => {
+    async ({ params, request }) => {
+      const session = await auth.api.getSession({ headers: request.headers });
       const event = await prisma.event.findUnique({
         where: { slug: params.slug },
       });
 
       if (!event) {
+        return { ok: false, message: "Event not exist!" };
+      }
+
+      const canView =
+        event.status === "LIVE" || event.creatorId === session?.user.id;
+
+      if (!canView) {
         return { ok: false, message: "Event not exist!" };
       }
       return {
@@ -413,7 +413,7 @@ export const eventsRoutes = new Elysia({ prefix: "/events" })
   )
   .get(
     "/tickets/:slug",
-    async ({ params, query, request, set }) => {
+    async ({ params, query, request }) => {
       const session = await auth.api.getSession({ headers: request.headers });
       if (!session?.user) {
         return { ok: false, message: "Unauthorised!" };

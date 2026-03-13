@@ -3,6 +3,11 @@ import type Stripe from "stripe";
 import { sendTicketConfirmationEmail } from "@/email";
 import { prisma } from "@/lib/prisma";
 import { stripeClient } from "@/lib/stripe";
+import {
+  normalizeEventTiers,
+  totalSeatsFromTiers,
+  toMinorUnits,
+} from "@/lib/ticketing";
 
 type CreatedTicket = {
   tierName: string;
@@ -23,23 +28,6 @@ export type TicketCreateResult = {
   status: TicketCreateStatus;
   createdTickets: CreatedTicket[];
 };
-
-type PriceTier = {
-  id?: string;
-  name?: string;
-  price?: number;
-  seats?: number;
-  note?: string;
-};
-
-function totalSeatsFromPrices(prices: unknown) {
-  if (!Array.isArray(prices)) return 0;
-  return prices.reduce((sum, tier) => {
-    if (!tier || typeof tier !== "object") return sum;
-    const seats = Number((tier as { seats?: number }).seats ?? 0);
-    return sum + (Number.isFinite(seats) ? seats : 0);
-  }, 0);
-}
 
 async function ensureSessionWithItems(session: Stripe.Checkout.Session) {
   if (session.line_items) return session;
@@ -104,19 +92,12 @@ export async function createTicketsFromSession(
     const event = await tx.event.findUnique({ where: { id: eventId } });
     if (!event) return "missing_event" as const;
 
-    const tiers: PriceTier[] = Array.isArray(event.prices)
-      ? (event.prices as PriceTier[])
-      : [];
+    const tiers = normalizeEventTiers(event.prices, 0);
 
     // Validate seat availability for every requested tier
     for (const [tierName, requestedQty] of qtyByName) {
-      const tier = tiers.find(
-        (t) => typeof t.name === "string" && t.name === tierName,
-      );
-      const available =
-        tier && typeof tier.seats === "number" && Number.isFinite(tier.seats)
-          ? tier.seats
-          : 0;
+      const tier = tiers.find((candidate) => candidate.name === tierName);
+      const available = tier?.seats ?? 0;
 
       if (requestedQty > available) {
         console.error(
@@ -128,19 +109,16 @@ export async function createTicketsFromSession(
 
     // Decrement seats atomically (we hold the row lock via the transaction)
     const updatedPrices = tiers.map((tier) => {
-      const name = typeof tier.name === "string" ? tier.name : "";
-      const seats =
-        typeof tier.seats === "number" && Number.isFinite(tier.seats)
-          ? tier.seats
-          : undefined;
+      const name = tier.name;
+      const seats = tier.seats;
 
-      if (!name || seats === undefined) return tier;
+      if (!name) return tier;
       const qty = qtyByName.get(name) ?? 0;
       if (qty <= 0) return tier;
       return { ...tier, seats: seats - qty };
     });
 
-    const totalTickets = totalSeatsFromPrices(updatedPrices);
+    const totalTickets = totalSeatsFromTiers(updatedPrices);
 
     // Create ticket records
     for (const item of items) {
@@ -148,13 +126,11 @@ export async function createTicketsFromSession(
       const qty = item.quantity ?? 1;
       const unitAmount = item.price?.unit_amount ?? 0;
 
-      const matchedTier = tiers.find(
-        (t) => typeof t.name === "string" && t.name === name,
-      );
+      const matchedTier = tiers.find((candidate) => candidate.name === name);
 
       const resolvedPrice =
         typeof matchedTier?.price === "number"
-          ? Math.round(matchedTier.price * 100)
+          ? toMinorUnits(matchedTier.price)
           : unitAmount;
 
       await tx.ticket.create({
