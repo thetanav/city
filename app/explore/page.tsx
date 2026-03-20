@@ -1,26 +1,31 @@
 "use client";
 
-import { Calendar, MapPin, Search, X, Sparkles, SlidersHorizontal } from "lucide-react";
-import Link from "next/link";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { motion, AnimatePresence, Variants } from "framer-motion";
-
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { api } from "@/lib/eden";
-import { useEffect, useState } from "react";
-
 import {
-  Pagination,
-  PaginationContent,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-} from "@/components/ui/pagination";
-import { Skeleton } from "@/components/ui/skeleton";
+  ArrowLeft,
+  ArrowRight,
+  Calendar,
+  MapPin,
+  Search,
+  X,
+} from "lucide-react";
+import Link from "next/link";
+import { useDeferredValue, useState } from "react";
+
 import DynamicImg from "@/components/dynimg";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
+import { api } from "@/lib/eden";
 
 type EventStatus = "DRAFT" | "LIVE" | "STOPPED";
 
@@ -36,20 +41,7 @@ type ExploreEvent = {
   genre: string[];
 };
 
-const container: Variants = {
-  hidden: { opacity: 0 },
-  show: {
-    opacity: 1,
-    transition: {
-      staggerChildren: 0.05,
-    },
-  },
-};
-
-const item: Variants = {
-  hidden: { opacity: 0, y: 20 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: [0.22, 1, 0.36, 1] } },
-};
+const PAGE_SIZE = 9;
 
 function formatShortDate(iso: string | Date) {
   return new Intl.DateTimeFormat("en-US", {
@@ -62,172 +54,122 @@ function formatShortDate(iso: string | Date) {
 export default function ExplorePage() {
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(0);
-  const [debouncedQuery, setDebouncedQuery] = useState("");
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      setDebouncedQuery(query);
-    }, 300);
-
-    return () => window.clearTimeout(timer);
-  }, [query]);
+  const deferredQuery = useDeferredValue(query.trim());
 
   const { data: events, isFetching } = useQuery({
-    queryKey: ["explore", { page, query: debouncedQuery }],
+    queryKey: ["explore", { page, query: deferredQuery }],
     placeholderData: keepPreviousData,
     staleTime: 30_000,
     queryFn: async () => {
       const { data } = await api.events.get({
         query: {
-          query: debouncedQuery,
-          offset: page * 10,
-          limit: 10,
+          query: deferredQuery,
+          offset: page * PAGE_SIZE,
+          limit: PAGE_SIZE,
         },
       });
       return data;
     },
   });
 
+  const resultLabel = events
+    ? `${events.data.length} event${events.data.length === 1 ? "" : "s"}${deferredQuery ? ` for "${deferredQuery}"` : ""}`
+    : "Loading events...";
+
   return (
-    <div className="space-y-8 pb-20">
-      {/* Hero Section */}
-      <section className="relative py-12 px-1">
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="space-y-4 max-w-3xl"
-        >
-          <Badge variant="secondary" className="px-3 py-1 gap-1.5 bg-primary/10 text-primary border-none">
-            <Sparkles className="size-3" />
-            Featured Experiences
-          </Badge>
-          <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight">
-            Find your next <span className="text-primary">night out.</span>
-          </h1>
-          <p className="text-muted-foreground text-lg md:text-xl max-w-2xl">
-            Discover the best concerts, workshops, and social gatherings happening in your city.
-          </p>
-        </motion.div>
+    <div className="space-y-6">
+      <section className="space-y-2">
+        <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+          Explore events
+        </h1>
+        <p className="max-w-2xl text-sm text-muted-foreground sm:text-base">
+          Browse upcoming events with a plain search and a straightforward list.
+        </p>
       </section>
 
-      {/* Search & Filters */}
-      <motion.div 
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
-        className="sticky top-20 z-30 bg-background/80 backdrop-blur-md py-4 -mx-4 px-4 sm:mx-0 sm:px-0"
-      >
-        <div className="flex flex-col md:flex-row gap-3">
-          <div className="relative flex-1 group">
-            <Search className="absolute top-1/2 left-4 size-4 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors" />
+      <Card>
+        <CardHeader className="space-y-2">
+          <CardTitle>Search</CardTitle>
+          <CardDescription>{resultLabel}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
-              placeholder="Search events, venues, or vibes..."
-              className="pl-11 h-12 bg-muted/40 border-none focus-visible:ring-2 focus-visible:ring-primary/20 transition-all rounded-xl"
-              value={query}
+              className="pl-9 pr-10"
               onChange={(event) => {
                 setQuery(event.target.value);
                 setPage(0);
               }}
+              placeholder="Search events, venues, or genres"
+              value={query}
             />
-            <AnimatePresence>
-              {query.length > 0 && (
-                <motion.button
-                  initial={{ opacity: 0, scale: 0.8 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.8 }}
-                  type="button"
-                  onClick={() => {
-                    setQuery("");
-                    setPage(0);
-                  }}
-                  className="absolute top-1/2 right-3 -translate-y-1/2 p-1.5 rounded-full hover:bg-muted text-muted-foreground transition-colors"
-                >
-                  <X className="size-4" />
-                </motion.button>
-              )}
-            </AnimatePresence>
+            {query.length > 0 ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setQuery("");
+                  setPage(0);
+                }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground">
+                <X className="size-4" />
+              </button>
+            ) : null}
           </div>
-          <Button variant="outline" size="icon" className="h-12 w-12 shrink-0 md:hidden">
-            <SlidersHorizontal className="size-4" />
-          </Button>
-        </div>
-      </motion.div>
 
-      {/* Pagination & Status */}
-      <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-        <p className="text-sm font-medium text-muted-foreground">
-          {events ? `Showing ${events.data.length} events` : 'Loading events...'}
-        </p>
-        
-        <Pagination className="mx-0 w-auto">
-          <PaginationContent>
-            <PaginationItem>
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm text-muted-foreground">{resultLabel}</p>
+            <div className="flex items-center gap-2">
               <Button
-                variant="ghost"
-                size="sm"
                 disabled={!events?.previousPage}
-                onClick={() => setPage(page - 1)}
-                className="gap-1"
-              >
-                <PaginationPrevious className="h-4 w-4" />
-                <span>Prev</span>
-              </Button>
-            </PaginationItem>
-            <PaginationItem>
-              <div className="px-3 py-1 text-sm font-bold bg-primary/10 text-primary rounded-md">
-                {page + 1}
-              </div>
-            </PaginationItem>
-            <PaginationItem>
-              <Button
-                variant="ghost"
+                onClick={() => setPage((current) => Math.max(0, current - 1))}
                 size="sm"
-                disabled={!events?.nextPage}
-                onClick={() => setPage(page + 1)}
-                className="gap-1"
-              >
-                <span>Next</span>
-                <PaginationNext className="h-4 w-4" />
+                variant="outline">
+                <ArrowLeft className="size-4" />
+                Prev
               </Button>
-            </PaginationItem>
-          </PaginationContent>
-        </Pagination>
-      </div>
+              <span className="text-sm text-muted-foreground">Page {page + 1}</span>
+              <Button
+                disabled={!events?.nextPage}
+                onClick={() => setPage((current) => current + 1)}
+                size="sm"
+                variant="outline">
+                Next
+                <ArrowRight className="size-4" />
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
-      {/* Grid */}
-      <div className="min-h-[400px]">
+      <div className="min-h-[24rem]">
         {isFetching ? (
           <LoadingGrid />
         ) : events && events.data.length > 0 ? (
-          <motion.div 
-            variants={container}
-            initial="hidden"
-            animate="show"
-            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8"
-          >
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {events.data.map((event) => (
-              <motion.div key={event.slug} variants={item}>
-                <EventCard event={event} />
-              </motion.div>
+              <EventCard key={event.slug} event={event} />
             ))}
-          </motion.div>
+          </div>
         ) : (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="flex flex-col items-center justify-center py-20 text-center"
-          >
-            <div className="bg-muted p-6 rounded-full mb-4">
-              <Search className="size-10 text-muted-foreground/40" />
-            </div>
-            <h3 className="text-xl font-bold">No events found</h3>
-            <p className="text-muted-foreground max-w-xs mt-2">
-              Try adjusting your search or filters to find what you&apos;re looking for.
-            </p>
-            <Button variant="outline" className="mt-6" onClick={() => setQuery("")}>
-              Clear all searches
-            </Button>
-          </motion.div>
+          <Card>
+            <CardContent className="flex min-h-[24rem] flex-col items-center justify-center gap-4 text-center">
+              <div className="space-y-2">
+                <h2 className="text-2xl font-semibold">No events found</h2>
+                <p className="max-w-sm text-sm text-muted-foreground">
+                  Try another search term or clear the current query.
+                </p>
+              </div>
+              <Button
+                onClick={() => {
+                  setQuery("");
+                  setPage(0);
+                }}
+                variant="outline">
+                Clear search
+              </Button>
+            </CardContent>
+          </Card>
         )}
       </div>
     </div>
@@ -236,22 +178,16 @@ export default function ExplorePage() {
 
 function LoadingGrid() {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
-      {[1, 2, 3, 4, 5, 6].map((idx) => (
-        <div key={idx} className="space-y-4">
-          <Skeleton className="aspect-[3/4] w-full rounded-2xl" />
-          <div className="space-y-2 px-1">
-            <div className="flex gap-2">
-              <Skeleton className="h-5 w-16" />
-              <Skeleton className="h-5 w-16" />
-            </div>
-            <Skeleton className="h-7 w-full" />
-            <div className="flex gap-4">
-              <Skeleton className="h-4 w-20" />
-              <Skeleton className="h-4 w-24" />
-            </div>
-          </div>
-        </div>
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      {Array.from({ length: 6 }).map((_, index) => (
+        <Card key={index}>
+          <Skeleton className="aspect-[4/5] w-full rounded-t-2xl rounded-b-none" />
+          <CardContent className="space-y-3 pt-6">
+            <Skeleton className="h-5 w-24" />
+            <Skeleton className="h-8 w-full" />
+            <Skeleton className="h-4 w-2/3" />
+          </CardContent>
+        </Card>
       ))}
     </div>
   );
@@ -259,70 +195,43 @@ function LoadingGrid() {
 
 function EventCard({ event }: { event: ExploreEvent }) {
   const dateText = formatShortDate(event.startDate);
+  const cityText = event.city || event.location;
+  const label = event.genre[0] ?? "Live event";
 
   return (
-    <Link
-      href={`/e/${event.slug}`}
-      className="group block select-none"
-    >
-      <div className="space-y-4">
-        {/* Poster Container */}
-        <div className="relative aspect-[3/4] overflow-hidden rounded-2xl shadow-sm border bg-muted">
-          {event.posterImage ? (
-            <DynamicImg
-              src={event.posterImage}
-              className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-105"
-            />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center">
-              <Calendar className="size-12 text-muted-foreground/20" />
-            </div>
-          )}
-          
-          {/* Overlay info */}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-6">
-             <Button variant="secondary" size="sm" className="w-full font-bold">
-               Get Tickets
-             </Button>
+    <Card render={<Link href={`/e/${event.slug}`} />}>
+      <div className="overflow-hidden rounded-t-2xl border-b bg-muted/40">
+        {event.posterImage ? (
+          <DynamicImg
+            alt={`${event.title} poster`}
+            className="aspect-[4/5] w-full"
+            src={event.posterImage}
+          />
+        ) : (
+          <div className="flex aspect-[4/5] items-center justify-center">
+            <Calendar className="size-10 text-muted-foreground" />
           </div>
-          
-          {/* Top Badge */}
-          <div className="absolute top-3 left-3">
-             <div className="bg-background/90 backdrop-blur-md px-2 py-1 rounded-md text-[10px] font-bold shadow-sm flex items-center gap-1.5 border border-primary/10">
-               <div className="size-1.5 rounded-full bg-primary animate-pulse" />
-               LIVE
-             </div>
-          </div>
-        </div>
-
-        {/* Content */}
-        <div className="space-y-2 px-1">
-          {event.genre.length > 0 && (
-            <div className="flex flex-wrap items-center gap-1.5">
-              {event.genre.slice(0, 2).map((genre) => (
-                <Badge key={genre} variant="outline" className="text-[10px] uppercase font-bold tracking-wider py-0 px-1.5 bg-muted/50 border-none text-muted-foreground">
-                  {genre}
-                </Badge>
-              ))}
-            </div>
-          )}
-          
-          <h3 className="font-bold text-xl group-hover:text-primary transition-colors line-clamp-1 leading-tight">
-            {event.title}
-          </h3>
-          
-          <div className="flex items-center gap-4 text-sm font-medium text-muted-foreground/80">
-            <span className="flex items-center gap-1.5">
-              <Calendar className="size-4 text-primary/60" />
-              {dateText}
-            </span>
-            <span className="flex items-center gap-1.5 border-l pl-4">
-              <MapPin className="size-4 text-primary/60" />
-              <span className="line-clamp-1">{event.city || event.location}</span>
-            </span>
-          </div>
-        </div>
+        )}
       </div>
-    </Link>
+
+      <CardHeader className="space-y-3">
+        <Badge variant="secondary" className="w-fit">
+          {label}
+        </Badge>
+        <div className="space-y-1">
+          <p className="text-sm text-muted-foreground">{dateText}</p>
+          <CardTitle className="text-2xl">{event.title}</CardTitle>
+        </div>
+      </CardHeader>
+
+      <CardContent className="text-sm text-muted-foreground">
+        <div className="flex items-center gap-2">
+          <MapPin className="size-4" />
+          <span className="line-clamp-1">{cityText}</span>
+        </div>
+      </CardContent>
+
+      <CardFooter className="text-sm font-medium">View event</CardFooter>
+    </Card>
   );
 }

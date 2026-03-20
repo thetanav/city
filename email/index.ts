@@ -1,6 +1,5 @@
-import { renderToStaticMarkup } from "react-dom/server";
-import { Resend } from "resend";
 import { createElement } from "react";
+import { Resend } from "resend";
 
 import {
   TicketConfirmationEmail,
@@ -40,15 +39,10 @@ function buildDashboardUrl(eventSlug: string) {
   }
 }
 
-function renderTicketEmail(data: TicketConfirmationEmailProps) {
-  return `<!DOCTYPE html>${renderToStaticMarkup(createElement(TicketConfirmationEmail, data))}`;
-}
-
 export async function sendTicketConfirmationEmail(data: TicketEmailData) {
   const totalQty = data.tickets.reduce((sum, t) => sum + t.qty, 0);
   const subject = `Your ${totalQty} ticket${totalQty !== 1 ? "s" : ""} for ${data.eventTitle}`;
-
-  const html = renderTicketEmail({
+  const emailProps: TicketConfirmationEmailProps = {
     userName: data.userName,
     eventTitle: data.eventTitle,
     eventDate: data.eventDate,
@@ -57,13 +51,13 @@ export async function sendTicketConfirmationEmail(data: TicketEmailData) {
     tickets: data.tickets,
     totalAmount: data.totalAmount,
     dashboardUrl: buildDashboardUrl(data.eventSlug),
-  });
+  };
 
   const { data: result, error } = await resend.emails.send({
     from: FROM_EMAIL,
     to: data.to,
+    react: createElement(TicketConfirmationEmail, emailProps),
     subject,
-    html,
   });
 
   if (error) {

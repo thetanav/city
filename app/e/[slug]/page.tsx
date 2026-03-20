@@ -18,6 +18,7 @@ import remarkGfm from "remark-gfm";
 import NumberFlow from "@number-flow/react";
 
 import { Loading } from "@/components/states";
+import DynamicImg from "@/components/dynimg";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -325,22 +326,19 @@ export default function Page({
   }
 
   return (
-    <div className="space-y-6 py-8">
+    <div className="space-y-6">
       {event.posterImage && (
-        <div className="overflow-hidden rounded-2xl border shadow">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
+        <div className="overflow-hidden rounded-lg border">
+          <DynamicImg
+            alt={`${event.title} cover`}
+            className="aspect-16/7 w-full"
             src={event.posterImage}
-            alt="Event cover"
-            className="aspect-16/7 w-full object-cover"
           />
         </div>
       )}
 
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-          {event.title}
-        </h1>
+        <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{event.title}</h1>
         {event.tagline ? (
           <p className="mt-1 text-muted-foreground">{event.tagline}</p>
         ) : null}

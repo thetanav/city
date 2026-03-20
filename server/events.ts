@@ -413,7 +413,7 @@ export const eventsRoutes = new Elysia({ prefix: "/events" })
   )
   .get(
     "/tickets/:slug",
-    async ({ params, query, request, set }) => {
+    async ({ params, query, request }) => {
       const session = await auth.api.getSession({ headers: request.headers });
       if (!session?.user) {
         return { ok: false, message: "Unauthorised!" };

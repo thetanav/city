@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/select";
 import { toastManager } from "@/components/ui/toast";
 import TimeForm from "@/components/timeform";
+import DynamicImg from "@/components/dynimg";
 
 type Tier = {
   id: string;
@@ -440,7 +441,9 @@ export default function EventCreator() {
             <div className="grid gap-4">
               <div className="grid gap-3">
                 {tiers.map((tier) => (
-                  <div className="grid gap-2 sm:grid-cols-[1.2fr_.7fr_.7fr_auto] sm:items-end">
+                  <div
+                    key={tier.id}
+                    className="grid gap-2 sm:grid-cols-[1.2fr_.7fr_.7fr_auto] sm:items-end">
                     <div>
                       <Label className="text-xs text-muted-foreground">
                         Tier name
@@ -597,11 +600,10 @@ export default function EventCreator() {
                 </div>
                 <div className="relative overflow-hidden rounded-lg border aspect-16/10 bg-muted">
                   {coverUrl.trim() ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={coverUrl}
+                    <DynamicImg
                       alt="Cover preview"
-                      className="h-full w-full object-cover"
+                      className="h-full w-full"
+                      src={coverUrl}
                     />
                   ) : (
                     <div className="flex h-full w-full items-center justify-center">

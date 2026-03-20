@@ -7,7 +7,7 @@ import { useMutation } from "@tanstack/react-query";
 export default function Page() {
   const { mutate } = useMutation({
     mutationFn: async () => {
-      const data = await api.health.get();
+      await api.health.get();
     },
   });
   return <Button onClick={() => mutate()}>GOOOO!!!</Button>;

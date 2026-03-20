@@ -1,0 +1,3 @@
+[ ] Set it as default logger for elysia (lib/logger.ts:17)
+[ ] Add checking for each service (server/health.ts:4)
+[ ] fix the tier type here and all over the project (server/payments.ts:8)
