@@ -27,8 +27,7 @@ type TicketEmailData = {
 };
 
 function buildDashboardUrl(eventSlug: string) {
-  const siteUrl =
-    process.env.NEXT_PUBLIC_APP_URL ?? process.env.BETTER_AUTH_URL ?? "";
+  const siteUrl = process.env.NEXT_PUBLIC_APP_URL ?? process.env.BETTER_AUTH_URL ?? "";
 
   if (!siteUrl) return "";
 

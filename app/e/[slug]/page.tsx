@@ -92,9 +92,7 @@ function normalizeEvent(value: unknown): EventDetails | null {
   const totalTickets = value.totalTickets;
   const startDate = toIsoDate(value.startDate);
   const endDate =
-    value.endDate === null || value.endDate === undefined
-      ? null
-      : toIsoDate(value.endDate);
+    value.endDate === null || value.endDate === undefined ? null : toIsoDate(value.endDate);
   const status = value.status;
 
   if (
@@ -117,17 +115,13 @@ function normalizeEvent(value: unknown): EventDetails | null {
     tagline: typeof value.tagline === "string" ? value.tagline : null,
     description,
     location,
-    contactEmail:
-      typeof value.contactEmail === "string" ? value.contactEmail : null,
+    contactEmail: typeof value.contactEmail === "string" ? value.contactEmail : null,
     posterImage: typeof value.posterImage === "string" ? value.posterImage : null,
     prices: value.prices,
     totalTickets,
     startDate,
     endDate,
-    status:
-      status === "LIVE" || status === "STOPPED" || status === "DRAFT"
-        ? status
-        : "DRAFT",
+    status: status === "LIVE" || status === "STOPPED" || status === "DRAFT" ? status : "DRAFT",
   };
 }
 
@@ -146,19 +140,15 @@ function checkoutStateMessage(event: EventDetails, hasEnded: boolean, soldOut: b
   return "Pick your tickets";
 }
 
-export default function Page({
-  params,
-}: {
-  params: Promise<{ slug: string }>;
-}) {
+export default function Page({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
   const router = useRouter();
   const searchParams = useSearchParams();
   const { data: session } = useSession();
   const [now, setNow] = useState(() => new Date());
-  const [selectionByEvent, setSelectionByEvent] = useState<
-    Record<string, Record<string, number>>
-  >({});
+  const [selectionByEvent, setSelectionByEvent] = useState<Record<string, Record<string, number>>>(
+    {},
+  );
 
   const {
     data: event,
@@ -251,7 +241,8 @@ export default function Page({
   const remainingSeconds = Math.floor((remainingMs / 1000) % 60);
   const hasStarted = now >= start;
   const hasEnded = now > end;
-  const soldOut = tiers.length > 0 ? tiers.every((tier) => tier.seats <= 0) : event.totalTickets <= 0;
+  const soldOut =
+    tiers.length > 0 ? tiers.every((tier) => tier.seats <= 0) : event.totalTickets <= 0;
   const checkoutOpen = event.status === "LIVE" && !hasEnded && !soldOut;
 
   const subtotal = selectedTiers.reduce((sum, tier) => sum + tier.price * tier.qty, 0);
@@ -296,9 +287,7 @@ export default function Page({
         : "Buy tickets";
   const mapsHref = buildMapSearchUrl(event.location);
 
-  function updateSelections(
-    updater: (current: Record<string, number>) => Record<string, number>,
-  ) {
+  function updateSelections(updater: (current: Record<string, number>) => Record<string, number>) {
     setSelectionByEvent((current) => ({
       ...current,
       [eventKey]: updater(current[eventKey] ?? {}),
@@ -327,6 +316,18 @@ export default function Page({
 
   return (
     <div className="space-y-6">
+      {event.status == "STOPPED" && (
+        <div className="border-y-2 border-yellow-600 bg-yellow-200 py-2 text-center italic underline">
+          This event is still not available for buying
+        </div>
+      )}
+
+      {event.status == "DRAFT" && (
+        <div className="border-y-2 border-gray-600 bg-gray-200 py-2 text-center italic underline">
+          This event is not live till yet
+        </div>
+      )}
+
       {event.posterImage && (
         <div className="overflow-hidden rounded-lg border">
           <DynamicImg
@@ -339,9 +340,7 @@ export default function Page({
 
       <div>
         <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{event.title}</h1>
-        {event.tagline ? (
-          <p className="mt-1 text-muted-foreground">{event.tagline}</p>
-        ) : null}
+        {event.tagline ? <p className="mt-1 text-muted-foreground">{event.tagline}</p> : null}
       </div>
 
       {paymentNotice ? (
@@ -362,9 +361,7 @@ export default function Page({
           <Card>
             <CardHeader>
               <CardTitle>About</CardTitle>
-              <CardDescription>
-                What you should know before you go.
-              </CardDescription>
+              <CardDescription>What you should know before you go.</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-4">
               <div className="grid gap-3 sm:grid-cols-2">
@@ -393,10 +390,7 @@ export default function Page({
                     <Mail className="mt-0.5 size-4 text-muted-foreground" />
                     <div>
                       <p className="text-xs text-muted-foreground">Contact</p>
-                      <a
-                        className="text-sm font-medium"
-                        href={`mailto:${event.contactEmail}`}
-                      >
+                      <a className="text-sm font-medium" href={`mailto:${event.contactEmail}`}>
                         {event.contactEmail}
                       </a>
                     </div>
@@ -405,18 +399,14 @@ export default function Page({
                 <div className="flex items-start gap-3">
                   <Ticket className="mt-0.5 size-4 text-muted-foreground" />
                   <div>
-                    <p className="text-xs text-muted-foreground">
-                      Remaining tickets
-                    </p>
+                    <p className="text-xs text-muted-foreground">Remaining tickets</p>
                     <p className="text-sm font-medium">{event.totalTickets}</p>
                   </div>
                 </div>
               </div>
 
               <div className="prose prose-md mt-3 max-w-none dark:prose-invert">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                  {event.description}
-                </ReactMarkdown>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{event.description}</ReactMarkdown>
               </div>
             </CardContent>
           </Card>
@@ -424,9 +414,7 @@ export default function Page({
           <Card>
             <CardHeader>
               <CardTitle>Tickets</CardTitle>
-              <CardDescription>
-                Select a tier. Seats are limited.
-              </CardDescription>
+              <CardDescription>Select a tier. Seats are limited.</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-3">
               {tiers.map((tier) => {
@@ -447,13 +435,9 @@ export default function Page({
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-semibold">{tier.name}</p>
                         {tier.note ? (
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            {tier.note}
-                          </p>
+                          <p className="mt-1 text-xs text-muted-foreground">{tier.note}</p>
                         ) : null}
-                        <p className="mt-1 text-sm font-semibold">
-                          {formatMoney(tier.price)}
-                        </p>
+                        <p className="mt-1 text-sm font-semibold">{formatMoney(tier.price)}</p>
                       </div>
                       <div className="shrink-0 text-right">
                         <div className="flex items-center gap-2">
@@ -471,9 +455,7 @@ export default function Page({
                           >
                             <Minus className="size-3" />
                           </Button>
-                          <div className="min-w-8 text-center font-mono text-sm">
-                            {qty}
-                          </div>
+                          <div className="min-w-8 text-center font-mono text-sm">{qty}</div>
                           <Button
                             variant="outline"
                             size="icon"
@@ -503,9 +485,7 @@ export default function Page({
           <Card>
             <CardHeader>
               <CardTitle>Venue</CardTitle>
-              <CardDescription>
-                Check the map and plan your route.
-              </CardDescription>
+              <CardDescription>Check the map and plan your route.</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-3">
               <div className="overflow-hidden rounded-lg">
@@ -517,14 +497,11 @@ export default function Page({
                 />
               </div>
               <div className="flex justify-end">
-                <Button
-                  variant="outline"
-                  render={
-                    <a href={mapsHref} target="_blank" rel="noreferrer" />
-                  }
-                >
-                  Open in Maps
-                  <ExternalLink className="size-4" />
+                <Button asChild variant="outline">
+                  <a href={mapsHref} target="_blank" rel="noreferrer">
+                    Open in Maps
+                    <ExternalLink className="size-4" />
+                  </a>
                 </Button>
               </div>
             </CardContent>
@@ -544,24 +521,16 @@ export default function Page({
                 </p>
               ) : hasStarted ? (
                 <p className="text-sm text-muted-foreground">
-                  The event has started. Any remaining tickets can still be purchased while sales are open.
+                  The event has started. Any remaining tickets can still be purchased while sales
+                  are open.
                 </p>
               ) : (
                 <div className="flex items-center text-3xl font-black">
-                  <NumberFlow
-                    value={remainingHours}
-                    format={{ minimumIntegerDigits: 2 }}
-                  />
+                  <NumberFlow value={remainingHours} format={{ minimumIntegerDigits: 2 }} />
                   :
-                  <NumberFlow
-                    value={remainingMinutes}
-                    format={{ minimumIntegerDigits: 2 }}
-                  />
+                  <NumberFlow value={remainingMinutes} format={{ minimumIntegerDigits: 2 }} />
                   :
-                  <NumberFlow
-                    value={remainingSeconds}
-                    format={{ minimumIntegerDigits: 2 }}
-                  />
+                  <NumberFlow value={remainingSeconds} format={{ minimumIntegerDigits: 2 }} />
                 </div>
               )}
             </CardContent>
@@ -584,14 +553,9 @@ export default function Page({
             <CardContent className="grid gap-4">
               {selectedTiers.length > 0 ? (
                 <div className="grid gap-2">
-                  <p className="text-xs font-medium text-muted-foreground">
-                    Your selection
-                  </p>
+                  <p className="text-xs font-medium text-muted-foreground">Your selection</p>
                   {selectedTiers.map((tier) => (
-                    <div
-                      key={tier.id}
-                      className="flex items-center justify-between text-sm"
-                    >
+                    <div key={tier.id} className="flex items-center justify-between text-sm">
                       <span>
                         {tier.qty}x {tier.name}
                       </span>
@@ -639,11 +603,7 @@ export default function Page({
               <Button
                 className="w-full sm:w-auto"
                 onClick={onCheckout}
-                disabled={
-                  selectedTiers.length === 0 ||
-                  checkoutMutation.isPending ||
-                  !checkoutOpen
-                }
+                disabled={selectedTiers.length === 0 || checkoutMutation.isPending || !checkoutOpen}
               >
                 {checkoutLabel}
               </Button>

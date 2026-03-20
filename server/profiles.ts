@@ -1,6 +1,7 @@
 import { Elysia } from "elysia";
+import { eq } from "drizzle-orm";
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { db, schema } from "@/db";
 
 export const profilesRoutes = new Elysia({ prefix: "/profiles" })
   .get("/", async ({ request }) => {
@@ -9,15 +10,16 @@ export const profilesRoutes = new Elysia({ prefix: "/profiles" })
       return { ok: false, message: "Unauthorised!" };
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        image: true,
-      },
-    });
+    const [user] = await db
+      .select({
+        id: schema.user.id,
+        name: schema.user.name,
+        email: schema.user.email,
+        image: schema.user.image,
+      })
+      .from(schema.user)
+      .where(eq(schema.user.id, session.user.id))
+      .limit(1);
 
     if (!user) {
       return { ok: false, message: "User not found!" };
@@ -38,16 +40,16 @@ export const profilesRoutes = new Elysia({ prefix: "/profiles" })
     const updateData: Record<string, string> = {};
     if (name !== undefined) updateData.name = name;
 
-    const user = await prisma.user.update({
-      where: { id: session.user.id },
-      data: updateData,
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        image: true,
-      },
-    });
+    const [user] = await db
+      .update(schema.user)
+      .set({ ...updateData, updatedAt: new Date() })
+      .where(eq(schema.user.id, session.user.id))
+      .returning({
+        id: schema.user.id,
+        name: schema.user.name,
+        email: schema.user.email,
+        image: schema.user.image,
+      });
 
     return { ok: true, data: user };
   });

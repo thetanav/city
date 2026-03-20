@@ -1,7 +1,7 @@
 import { betterAuth } from "better-auth";
 import { nextCookies } from "better-auth/next-js";
-import { prismaAdapter } from "better-auth/adapters/prisma";
-import { prisma } from "./prisma";
+import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { db, schema } from "@/db";
 import { stripe } from "@better-auth/stripe";
 import { stripeClient } from "./stripe";
 import { stripeLogger } from "./logger";
@@ -24,7 +24,8 @@ export const auth = betterAuth({
       },
     }),
   ],
-  database: prismaAdapter(prisma, {
-    provider: "postgresql",
+  database: drizzleAdapter(db, {
+    provider: "pg",
+    schema,
   }),
 });

@@ -1,12 +1,12 @@
 # City - Event Management & Ticketing Platform
 
-City is a modern, high-performance event management and ticketing platform built with Next.js 16, ElysiaJS, and Prisma. It provides a seamless experience for creating, discovering, and booking tickets for local events.
+City is a modern, high-performance event management and ticketing platform built with Next.js 16, ElysiaJS, and Drizzle ORM. It provides a seamless experience for creating, discovering, and booking tickets for local events.
 
 ## 🚀 Tech Stack
 
 - **Frontend:** [Next.js 16 (App Router)](https://nextjs.org/) & [TypeScript](https://www.typescriptlang.org/)
 - **API Engine:** [ElysiaJS](https://elysiajs.com/) (running within Next.js route handlers)
-- **Database:** [PostgreSQL](https://www.postgresql.org/) with [Prisma ORM](https://www.prisma.io/)
+- **Database:** [PostgreSQL](https://www.postgresql.org/) with [Drizzle ORM](https://orm.drizzle.team/)
 - **Authentication:** [Better Auth](https://www.better-auth.com/) (Google & Email/Password)
 - **Styling:** [Tailwind CSS 4](https://tailwindcss.com/) & [Framer Motion](https://www.framer.com/motion/)
 - **Payments:** [Stripe](https://stripe.com/)
@@ -33,18 +33,21 @@ City is a modern, high-performance event management and ticketing platform built
 ### Installation
 
 1. Clone the repository:
+
    ```bash
    git clone <repository-url>
    cd city
    ```
 
 2. Install dependencies:
+
    ```bash
    bun install
    ```
 
 3. Configure environment variables:
    Create a `.env` file in the root directory (or copy `.env.example`) and add:
+
    ```env
    DATABASE_URL="postgresql://..."
    NEXT_PUBLIC_APP_URL="http://localhost:3000"
@@ -57,6 +60,7 @@ City is a modern, high-performance event management and ticketing platform built
    ```
 
 4. Set up the database:
+
    ```bash
    bun run generate
    bun run migrate
@@ -72,8 +76,8 @@ City is a modern, high-performance event management and ticketing platform built
 - `app/`: Next.js App Router (Pages, Layouts, Client/Server components)
 - `server/api/`: ElysiaJS API modules (grouped by feature)
 - `components/`: UI and feature-specific components
-- `lib/`: Shared utilities (Auth, Prisma, Stripe, Email)
-- `prisma/`: Database schema and migrations
+- `lib/`: Shared utilities (Auth, Database, Stripe, Email)
+- `db/`: Database schema and migrations
 
 ## 📜 Available Scripts
 
@@ -81,8 +85,8 @@ City is a modern, high-performance event management and ticketing platform built
 - `bun run build`: Creates a production-ready build
 - `bun run start`: Runs the built application
 - `bun run lint`: Runs ESLint for code quality checks
-- `bun run generate`: Generates the Prisma client
-- `bun run migrate`: Applies database migrations
+- `bun run generate`: Generates Drizzle migration SQL files
+- `bun run migrate`: Pushes schema changes using Drizzle
 
 ## 🚀 Deploy to Vercel
 

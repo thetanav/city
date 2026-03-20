@@ -12,9 +12,7 @@ const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
 
 export const metadata: Metadata = {
   metadataBase: new URL(
-    process.env.NEXT_PUBLIC_APP_URL ??
-      process.env.BETTER_AUTH_URL ??
-      "http://localhost:3000",
+    process.env.NEXT_PUBLIC_APP_URL ?? process.env.BETTER_AUTH_URL ?? "http://localhost:3000",
   ),
   title: {
     default: "City",
@@ -26,8 +24,7 @@ export const metadata: Metadata = {
     type: "website",
     siteName: "City",
     title: "City",
-    description:
-      "Publish events, sell tickets, and run the room from one polished workflow.",
+    description: "Publish events, sell tickets, and run the room from one polished workflow.",
     images: [
       {
         url: "/og.png",
@@ -49,17 +46,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="en"
-      suppressHydrationWarning
-      className={cn("font-sans", geist.variable)}>
+    <html lang="en" suppressHydrationWarning className={cn("font-sans", geist.variable)}>
       <body className="min-h-screen bg-background antialiased">
         <Providers>
           <ThemeProvider
             attribute="class"
             defaultTheme="system"
             enableSystem
-            disableTransitionOnChange>
+            disableTransitionOnChange
+          >
             <ToastProvider>
               <AnchoredToastProvider>
                 <NextTopLoader color="#09090b" shadow={false} showSpinner={false} />

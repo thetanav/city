@@ -88,8 +88,7 @@ export default function HomePage({
   const validTickets = tickets.filter((ticket) => ticket.valid !== false);
   const upcomingTickets = [...validTickets].sort(
     (left, right) =>
-      new Date(left.event.startDate).getTime() -
-      new Date(right.event.startDate).getTime(),
+      new Date(left.event.startDate).getTime() - new Date(right.event.startDate).getTime(),
   );
   const nextTicket = upcomingTickets[0] ?? null;
 
@@ -106,9 +105,11 @@ export default function HomePage({
             </p>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row">
-            <Button render={<Link href="/explore" />}>Explore events</Button>
-            <Button render={<Link href="/auth" />} variant="outline">
-              Sign in
+            <Button asChild>
+              <Link href="/explore">Explore events</Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link href="/auth">Sign in</Link>
             </Button>
           </div>
         </CardContent>
@@ -127,11 +128,15 @@ export default function HomePage({
             </CardDescription>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
-            <Button render={<Link href="/dashboard" />} variant="outline">
-              <User2 className="size-4" />
-              Manage events
+            <Button asChild variant="outline">
+              <Link href="/dashboard">
+                <User2 className="size-4" />
+                Manage events
+              </Link>
             </Button>
-            <Button render={<Link href="/explore" />}>Find more</Button>
+            <Button asChild>
+              <Link href="/explore">Find more</Link>
+            </Button>
           </div>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-3">
@@ -154,28 +159,20 @@ export default function HomePage({
 
       <section className="space-y-3">
         <div className="space-y-1">
-          <h2 className="text-2xl font-semibold tracking-tight">
-            Upcoming tickets
-          </h2>
+          <h2 className="text-2xl font-semibold tracking-tight">Upcoming tickets</h2>
           {tickets.length > 0 ? (
             <p className="text-sm text-muted-foreground">
               Purchased since {formatPurchaseDate(tickets[tickets.length - 1].createdAt)}
             </p>
           ) : (
-            <p className="text-sm text-muted-foreground">
-              Your purchases will show up here.
-            </p>
+            <p className="text-sm text-muted-foreground">Your purchases will show up here.</p>
           )}
         </div>
 
         {tickets.length > 0 ? (
           <div className="grid gap-4 lg:grid-cols-2">
             {tickets.map((ticket) => (
-              <TicketCard
-                key={ticket.id}
-                onClick={() => setActiveTicket(ticket)}
-                ticket={ticket}
-              />
+              <TicketCard key={ticket.id} onClick={() => setActiveTicket(ticket)} ticket={ticket} />
             ))}
           </div>
         ) : (
@@ -187,7 +184,9 @@ export default function HomePage({
                   Pick an event and complete checkout to see tickets here.
                 </p>
               </div>
-              <Button render={<Link href="/explore" />}>Find your first event</Button>
+              <Button asChild>
+                <Link href="/explore">Find your first event</Link>
+              </Button>
             </CardContent>
           </Card>
         )}
@@ -196,10 +195,7 @@ export default function HomePage({
       <Dialog onOpenChange={(open) => !open && setActiveTicket(null)} open={!!activeTicket}>
         <DialogContent className="max-w-xl">
           {activeTicket ? (
-            <TicketDetails
-              onClose={() => setActiveTicket(null)}
-              ticket={activeTicket}
-            />
+            <TicketDetails onClose={() => setActiveTicket(null)} ticket={activeTicket} />
           ) : null}
         </DialogContent>
       </Dialog>
@@ -207,13 +203,7 @@ export default function HomePage({
   );
 }
 
-function TicketDetails({
-  ticket,
-  onClose,
-}: {
-  ticket: TicketData;
-  onClose: () => void;
-}) {
+function TicketDetails({ ticket, onClose }: { ticket: TicketData; onClose: () => void }) {
   return (
     <div className="space-y-6">
       {ticket.event.posterImage ? (
@@ -267,17 +257,18 @@ function TicketDetails({
               {ticket.qty} admission{ticket.qty === 1 ? "" : "s"}
             </p>
             <p className="text-sm text-muted-foreground">
-              Ticket ID {ticket.id.slice(0, 8)} · bought{" "}
-              {formatPurchaseDate(ticket.createdAt)}
+              Ticket ID {ticket.id.slice(0, 8)} · bought {formatPurchaseDate(ticket.createdAt)}
             </p>
           </div>
         </div>
       </div>
 
       <div className="flex flex-col gap-2 sm:flex-row">
-        <Button className="w-full" render={<Link href={`/e/${ticket.event.slug}`} />}>
-          Event page
-          <ExternalLink className="size-4" />
+        <Button asChild className="w-full">
+          <Link href={`/e/${ticket.event.slug}`}>
+            Event page
+            <ExternalLink className="size-4" />
+          </Link>
         </Button>
         <Button className="w-full" onClick={onClose} variant="outline">
           Close
@@ -309,13 +300,7 @@ function DetailRow({
   );
 }
 
-function TicketCard({
-  ticket,
-  onClick,
-}: {
-  ticket: TicketData;
-  onClick: () => void;
-}) {
+function TicketCard({ ticket, onClick }: { ticket: TicketData; onClick: () => void }) {
   const dateText = formatTicketDay(ticket.event.startDate);
   const timeText = formatTicketTime(ticket.event.startDate);
 

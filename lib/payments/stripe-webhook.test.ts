@@ -143,8 +143,7 @@ describe("handleStripeWebhookRequest", () => {
   it("returns 500 when ticket creation throws so Stripe retries", async () => {
     const response = await handleStripeWebhookRequest(buildRequest(), {
       webhookSecret: "whsec_test",
-      constructEvent: () =>
-        checkoutEvent("checkout.session.async_payment_succeeded", "paid"),
+      constructEvent: () => checkoutEvent("checkout.session.async_payment_succeeded", "paid"),
       createTickets: async () => {
         throw new Error("db down");
       },

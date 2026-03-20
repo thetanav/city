@@ -1,14 +1,7 @@
 "use client";
 
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import {
-  ArrowLeft,
-  ArrowRight,
-  Calendar,
-  MapPin,
-  Search,
-  X,
-} from "lucide-react";
+import { ArrowLeft, ArrowRight, Calendar, MapPin, Search, X } from "lucide-react";
 import Link from "next/link";
 import { useDeferredValue, useState } from "react";
 
@@ -78,20 +71,7 @@ export default function ExplorePage() {
 
   return (
     <div className="space-y-6">
-      <section className="space-y-2">
-        <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-          Explore events
-        </h1>
-        <p className="max-w-2xl text-sm text-muted-foreground sm:text-base">
-          Browse upcoming events with a plain search and a straightforward list.
-        </p>
-      </section>
-
       <Card>
-        <CardHeader className="space-y-2">
-          <CardTitle>Search</CardTitle>
-          <CardDescription>{resultLabel}</CardDescription>
-        </CardHeader>
         <CardContent className="space-y-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -111,7 +91,8 @@ export default function ExplorePage() {
                   setQuery("");
                   setPage(0);
                 }}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground">
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground"
+              >
                 <X className="size-4" />
               </button>
             ) : null}
@@ -124,7 +105,8 @@ export default function ExplorePage() {
                 disabled={!events?.previousPage}
                 onClick={() => setPage((current) => Math.max(0, current - 1))}
                 size="sm"
-                variant="outline">
+                variant="outline"
+              >
                 <ArrowLeft className="size-4" />
                 Prev
               </Button>
@@ -133,7 +115,8 @@ export default function ExplorePage() {
                 disabled={!events?.nextPage}
                 onClick={() => setPage((current) => current + 1)}
                 size="sm"
-                variant="outline">
+                variant="outline"
+              >
                 Next
                 <ArrowRight className="size-4" />
               </Button>
@@ -146,7 +129,7 @@ export default function ExplorePage() {
         {isFetching ? (
           <LoadingGrid />
         ) : events && events.data.length > 0 ? (
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-2 grid-cols-3">
             {events.data.map((event) => (
               <EventCard key={event.slug} event={event} />
             ))}
@@ -165,7 +148,8 @@ export default function ExplorePage() {
                   setQuery("");
                   setPage(0);
                 }}
-                variant="outline">
+                variant="outline"
+              >
                 Clear search
               </Button>
             </CardContent>
@@ -199,39 +183,39 @@ function EventCard({ event }: { event: ExploreEvent }) {
   const label = event.genre[0] ?? "Live event";
 
   return (
-    <Card render={<Link href={`/e/${event.slug}`} />}>
-      <div className="overflow-hidden rounded-t-2xl border-b bg-muted/40">
-        {event.posterImage ? (
-          <DynamicImg
-            alt={`${event.title} poster`}
-            className="aspect-[4/5] w-full"
-            src={event.posterImage}
-          />
-        ) : (
-          <div className="flex aspect-[4/5] items-center justify-center">
-            <Calendar className="size-10 text-muted-foreground" />
+    <Link href={`/e/e${event.slug}`}>
+      <Card>
+        <div className="">
+          {event.posterImage ? (
+            <DynamicImg
+              alt={`${event.title} poster`}
+              className="aspect-video w-full"
+              src={event.posterImage}
+            />
+          ) : (
+            <div className="flex aspect-video items-center justify-center">
+              <Calendar className="size-10 text-muted-foreground" />
+            </div>
+          )}
+        </div>
+
+        <CardHeader>
+          <Badge variant="secondary" className="w-fit">
+            {event.status}
+          </Badge>
+          <div>
+            <p className="text-sm text-muted-foreground">{dateText}</p>
+            <CardTitle className="text-lg">{event.title}</CardTitle>
           </div>
-        )}
-      </div>
+        </CardHeader>
 
-      <CardHeader className="space-y-3">
-        <Badge variant="secondary" className="w-fit">
-          {label}
-        </Badge>
-        <div className="space-y-1">
-          <p className="text-sm text-muted-foreground">{dateText}</p>
-          <CardTitle className="text-2xl">{event.title}</CardTitle>
-        </div>
-      </CardHeader>
-
-      <CardContent className="text-sm text-muted-foreground">
-        <div className="flex items-center gap-2">
-          <MapPin className="size-4" />
-          <span className="line-clamp-1">{cityText}</span>
-        </div>
-      </CardContent>
-
-      <CardFooter className="text-sm font-medium">View event</CardFooter>
-    </Card>
+        <CardContent className="text-sm text-muted-foreground -mt-3">
+          <div className="flex items-center gap-2">
+            <MapPin className="size-4" />
+            <span className="line-clamp-1">{cityText}</span>
+          </div>
+        </CardContent>
+      </Card>
+    </Link>
   );
 }

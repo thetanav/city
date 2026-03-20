@@ -38,8 +38,8 @@ export default function Page() {
                 Event ops without the clutter.
               </CardTitle>
               <CardDescription className="max-w-2xl text-base">
-                City gives hosts a simple way to publish events, sell tickets,
-                and run the door from one place.
+                City gives hosts a simple way to publish events, sell tickets, and run the door from
+                one place.
               </CardDescription>
             </div>
           </CardHeader>
@@ -51,12 +51,14 @@ export default function Page() {
             </ul>
           </CardContent>
           <CardFooter className="flex flex-col items-start gap-3 sm:flex-row">
-            <Button render={<Link href="/explore" />}>
-              Explore events
-              <ArrowRight className="size-4" />
+            <Button asChild>
+              <Link href="/explore">
+                Explore events
+                <ArrowRight className="size-4" />
+              </Link>
             </Button>
-            <Button render={<Link href="/events/new" />} variant="outline">
-              Create an event
+            <Button asChild variant="outline">
+              <Link href="/events/new">Create an event</Link>
             </Button>
           </CardFooter>
         </Card>
@@ -82,9 +84,9 @@ export default function Page() {
           Built for hosts who want fewer moving parts
         </h2>
         <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
-          The public pages, member home, and organizer views now share the same
-          plain `shadcn` structure: clear type, standard spacing, and basic
-          cards instead of custom marketing styling.
+          The public pages, member home, and organizer views now share the same plain `shadcn`
+          structure: clear type, standard spacing, and basic cards instead of custom marketing
+          styling.
         </p>
       </section>
     </div>

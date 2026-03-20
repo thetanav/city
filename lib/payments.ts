@@ -1,13 +1,10 @@
 import type Stripe from "stripe";
+import { and, eq } from "drizzle-orm";
 
 import { sendTicketConfirmationEmail } from "@/email";
-import { prisma } from "@/lib/prisma";
+import { db, schema } from "@/db";
 import { stripeClient } from "@/lib/stripe";
-import {
-  normalizeEventTiers,
-  totalSeatsFromTiers,
-  toMinorUnits,
-} from "@/lib/ticketing";
+import { normalizeEventTiers, totalSeatsFromTiers, toMinorUnits } from "@/lib/ticketing";
 
 type CreatedTicket = {
   tierName: string;
@@ -57,9 +54,9 @@ export async function createTicketsFromSession(
 
   // Idempotency: if tickets already exist for this payment, skip
   if (paymentId) {
-    const existing = await prisma.ticket.findFirst({
-      where: { paymentId, eventId },
-      select: { id: true },
+    const existing = await db.query.ticket.findFirst({
+      where: and(eq(schema.ticket.paymentId, paymentId), eq(schema.ticket.eventId, eventId)),
+      columns: { id: true },
     });
 
     if (existing) {
@@ -87,9 +84,11 @@ export async function createTicketsFromSession(
   // with a fresh read of the event to avoid race conditions
   const createdTickets: CreatedTicket[] = [];
 
-  const result = await prisma.$transaction(async (tx) => {
+  const result = await db.transaction(async (tx) => {
     // Read the event inside the transaction for consistency
-    const event = await tx.event.findUnique({ where: { id: eventId } });
+    const event = await tx.query.event.findFirst({
+      where: eq(schema.event.id, eventId),
+    });
     if (!event) return "missing_event" as const;
 
     const tiers = normalizeEventTiers(event.prices, 0);
@@ -129,32 +128,32 @@ export async function createTicketsFromSession(
       const matchedTier = tiers.find((candidate) => candidate.name === name);
 
       const resolvedPrice =
-        typeof matchedTier?.price === "number"
-          ? toMinorUnits(matchedTier.price)
-          : unitAmount;
+        typeof matchedTier?.price === "number" ? toMinorUnits(matchedTier.price) : unitAmount;
 
-      await tx.ticket.create({
-        data: {
-          tierName: name,
-          qty,
-          unitPrice: resolvedPrice,
-          paymentId,
-          eventId,
-          userId,
-        },
+      await tx.insert(schema.ticket).values({
+        id: crypto.randomUUID(),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        tierName: name,
+        qty,
+        unitPrice: resolvedPrice,
+        paymentId,
+        eventId,
+        userId,
       });
 
       createdTickets.push({ tierName: name, qty, unitPrice: resolvedPrice });
     }
 
     // Persist decremented seats + totalTickets
-    await tx.event.update({
-      where: { id: event.id },
-      data: {
+    await tx
+      .update(schema.event)
+      .set({
         prices: updatedPrices,
         totalTickets,
-      },
-    });
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.event.id, event.id));
 
     return "created" as const;
   });
@@ -167,13 +166,13 @@ export async function createTicketsFromSession(
   if (userId && createdTickets.length > 0) {
     try {
       const [user, event] = await Promise.all([
-        prisma.user.findUnique({
-          where: { id: userId },
-          select: { email: true, name: true },
+        db.query.user.findFirst({
+          where: eq(schema.user.id, userId),
+          columns: { email: true, name: true },
         }),
-        prisma.event.findUnique({
-          where: { id: eventId },
-          select: {
+        db.query.event.findFirst({
+          where: eq(schema.event.id, eventId),
+          columns: {
             title: true,
             startDate: true,
             endDate: true,
@@ -199,10 +198,7 @@ export async function createTicketsFromSession(
         });
       }
     } catch (emailError) {
-      console.error(
-        "[payments] Failed to send confirmation email:",
-        emailError,
-      );
+      console.error("[payments] Failed to send confirmation email:", emailError);
     }
   }
 

@@ -243,16 +243,121 @@ export default function EventCreator() {
 
   return (
     <div>
-      <div className="space-y-1 mb-8">
         <h1 className="text-2xl font-semibold tracking-tight">
           Create an event
         </h1>
-      </div>
 
       <form
         onSubmit={(e) => e.preventDefault()}
-        className="grid gap-6 lg:grid-cols-[1.25fr_.85fr]">
-        <div className="grid gap-6">
+        className="flex gap-2">
+
+      <div className="grid content-start gap-2 w-108">
+
+
+        <section className="rounded-xl border bg-background p-5 sm:p-6">
+          <div className="mb-5 space-y-1">
+            <h2 className="text-lg font-semibold tracking-tight">Cover image</h2>
+          </div>
+          <div>
+            <div className="grid gap-3">
+              <div className="grid gap-2">
+                <Label htmlFor="coverUrl">Image URL</Label>
+                <Input
+                  id="coverUrl"
+                  type="url"
+                  value={coverUrl}
+                  onChange={(e) => setCoverUrl(e.target.value)}
+                  placeholder="https://images.example.com/cover.jpg"
+                  autoComplete="off"
+                />
+              </div>
+              <div className="relative overflow-hidden rounded-lg border aspect-16/10 bg-muted">
+                {coverUrl.trim() ? (
+                  <DynamicImg
+                    alt="Cover preview"
+                    className="h-full w-full"
+                    src={coverUrl}
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center">
+                    <div className="flex flex-col items-center gap-2 text-center">
+                      <ImageIcon className="size-8 text-muted-foreground" />
+                      <div>
+                        <p className="text-sm font-medium">
+                          Paste an image URL
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Preview appears here
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="flex items-center justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCoverUrl("")}
+                  disabled={!coverUrl.trim()}>
+                  Clear
+                </Button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+
+        <section className="rounded-xl border bg-background p-5 sm:p-6">
+          <div className="mb-5 space-y-1">
+            <h2 className="flex items-center justify-between gap-2 text-lg font-semibold tracking-tight">
+              Form progress
+              <Badge
+                variant={
+                  completedCount === completionChecks.length
+                    ? "success"
+                    : "info"
+              }>
+                {completedCount}/{completionChecks.length}
+              </Badge>
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              Complete all checks to unlock event creation.
+            </p>
+          </div>
+          <div className="grid gap-2">
+            {completionChecks.map((check) => (
+              <div
+                key={check.label}
+                className="flex items-center justify-between rounded-md border px-3 py-2">
+                <p className="text-sm">{check.label}</p>
+                {check.done ? (
+                  <Badge variant="success">Done</Badge>
+                ) : (
+                  <Badge variant="outline">Pending</Badge>
+                )}
+              </div>
+            ))}
+            <p
+              className={cn(
+                "text-xs",
+                canSubmit ? "text-emerald-600" : "text-muted-foreground",
+              )}>
+              {canSubmit ? (
+                "All required details are complete."
+              ) : (
+                <>
+                  <Lock className="mr-1 inline size-3" />
+                  {submitHint}
+                </>
+              )}
+            </p>
+          </div>
+        </section>
+      </div>
+
+        <div className="flex flex-col gap-2">
           {/* Event Details */}
           <section className="rounded-xl border bg-background p-5 sm:p-6">
             <div className="mb-5 space-y-1">
@@ -531,120 +636,17 @@ export default function EventCreator() {
           </section>
         </div>
 
-        {/* Sidebar */}
-        <div className="grid content-start gap-6">
-          <section className="rounded-xl border bg-background p-5 sm:p-6">
-            <div className="mb-5 space-y-1">
-              <h2 className="flex items-center justify-between gap-2 text-lg font-semibold tracking-tight">
-                Form progress
-                <Badge
-                  variant={
-                    completedCount === completionChecks.length
-                      ? "success"
-                      : "info"
-                }>
-                  {completedCount}/{completionChecks.length}
-                </Badge>
-              </h2>
-              <p className="text-sm text-muted-foreground">
-                Complete all checks to unlock event creation.
-              </p>
-            </div>
-            <div className="grid gap-2">
-              {completionChecks.map((check) => (
-                <div
-                  key={check.label}
-                  className="flex items-center justify-between rounded-md border px-3 py-2">
-                  <p className="text-sm">{check.label}</p>
-                  {check.done ? (
-                    <Badge variant="success">Done</Badge>
-                  ) : (
-                    <Badge variant="outline">Pending</Badge>
-                  )}
-                </div>
-              ))}
-              <p
-                className={cn(
-                  "text-xs",
-                  canSubmit ? "text-emerald-600" : "text-muted-foreground",
-                )}>
-                {canSubmit ? (
-                  "All required details are complete."
-                ) : (
-                  <>
-                    <Lock className="mr-1 inline size-3" />
-                    {submitHint}
-                  </>
-                )}
-              </p>
-            </div>
-          </section>
-
-          <section className="sticky top-20 rounded-xl border bg-background p-5 sm:p-6">
-            <div className="mb-5 space-y-1">
-              <h2 className="text-lg font-semibold tracking-tight">Cover image</h2>
-              <p className="text-sm text-muted-foreground">Paste an image URL.</p>
-            </div>
-            <div>
-              <div className="grid gap-3">
-                <div className="grid gap-2">
-                  <Label htmlFor="coverUrl">Image URL</Label>
-                  <Input
-                    id="coverUrl"
-                    type="url"
-                    value={coverUrl}
-                    onChange={(e) => setCoverUrl(e.target.value)}
-                    placeholder="https://images.example.com/cover.jpg"
-                    autoComplete="off"
-                  />
-                </div>
-                <div className="relative overflow-hidden rounded-lg border aspect-16/10 bg-muted">
-                  {coverUrl.trim() ? (
-                    <DynamicImg
-                      alt="Cover preview"
-                      className="h-full w-full"
-                      src={coverUrl}
-                    />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center">
-                      <div className="flex flex-col items-center gap-2 text-center">
-                        <ImageIcon className="size-8 text-muted-foreground" />
-                        <div>
-                          <p className="text-sm font-medium">
-                            Paste an image URL
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            Preview appears here
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-                <div className="flex items-center justify-end">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setCoverUrl("")}
-                    disabled={!coverUrl.trim()}>
-                    Clear
-                  </Button>
-                </div>
-              </div>
-            </div>
-            <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:justify-end">
-              <Button
-                type="submit"
-                className="w-full sm:w-auto"
-                disabled={!canSubmit || isPending}
-                onClick={() => mutate()}>
-                {isPending ? "Creating..." : "Create event"}
-              </Button>
-            </div>
-          </section>
-        </div>
       </form>
+      
+        <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:justify-end">
+          <Button
+            type="submit"
+            className="w-full sm:w-auto"
+            disabled={!canSubmit || isPending}
+            onClick={() => mutate()}>
+            {isPending ? "Creating..." : "Create event"}
+          </Button>
+        </div>
     </div>
   );
 }

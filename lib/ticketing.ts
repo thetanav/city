@@ -33,20 +33,14 @@ export function formatMinorMoney(value: number) {
 }
 
 export function calculateServiceFeeMinor(subtotalMinor: number) {
-  return Math.min(
-    MAX_SERVICE_FEE_MINOR,
-    Math.max(0, Math.round(subtotalMinor * 0.02)),
-  );
+  return Math.min(MAX_SERVICE_FEE_MINOR, Math.max(0, Math.round(subtotalMinor * 0.02)));
 }
 
 export function calculateServiceFee(subtotal: number) {
   return fromMinorUnits(calculateServiceFeeMinor(toMinorUnits(subtotal)));
 }
 
-export function normalizeEventTiers(
-  prices: unknown,
-  fallbackSeats: number,
-): NormalizedEventTier[] {
+export function normalizeEventTiers(prices: unknown, fallbackSeats: number): NormalizedEventTier[] {
   if (!Array.isArray(prices)) return [];
 
   return prices.map((item, index) => {
@@ -60,9 +54,7 @@ export function normalizeEventTiers(
     }
 
     const id =
-      typeof item.id === "string" && item.id.trim().length > 0
-        ? item.id
-        : `tier-${index + 1}`;
+      typeof item.id === "string" && item.id.trim().length > 0 ? item.id : `tier-${index + 1}`;
     const name =
       typeof item.name === "string" && item.name.trim().length > 0
         ? item.name

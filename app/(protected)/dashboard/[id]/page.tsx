@@ -21,14 +21,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  ArrowDown01,
-  ArrowDown10,
-  Hammer,
-  MoreVertical,
-  Search,
-  X,
-} from "lucide-react";
+import { ArrowDown01, ArrowDown10, Hammer, MoreVertical, Search, X } from "lucide-react";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -154,19 +147,11 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
   });
 
   const updateTicketMutation = useMutation({
-    mutationFn: async ({
-      id,
-      valid,
-    }: {
-      id: string;
-      valid: boolean;
-    }) => {
+    mutationFn: async ({ id, valid }: { id: string; valid: boolean }) => {
       const { data, error } = await api.tickets({ id }).put({ valid });
 
       if (error) {
-        throw new Error(
-          apiErrorMessage(error.value, "Failed to update ticket status"),
-        );
+        throw new Error(apiErrorMessage(error.value, "Failed to update ticket status"));
       }
 
       if (!data?.ok) {
@@ -184,8 +169,7 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
     },
     onError: (error) => {
       toastManager.add({
-        title:
-          error instanceof Error ? error.message : "Failed to update ticket status",
+        title: error instanceof Error ? error.message : "Failed to update ticket status",
         type: "error",
       });
     },
@@ -198,15 +182,11 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
           const { data, error } = await api.tickets({ id }).put({ valid: false });
 
           if (error) {
-            throw new Error(
-              apiErrorMessage(error.value, "Failed to invalidate selected tickets"),
-            );
+            throw new Error(apiErrorMessage(error.value, "Failed to invalidate selected tickets"));
           }
 
           if (!data?.ok) {
-            throw new Error(
-              apiErrorMessage(data, "Failed to invalidate selected tickets"),
-            );
+            throw new Error(apiErrorMessage(data, "Failed to invalidate selected tickets"));
           }
 
           return id;
@@ -225,10 +205,7 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
     },
     onError: (error) => {
       toastManager.add({
-        title:
-          error instanceof Error
-            ? error.message
-            : "Failed to invalidate selected tickets",
+        title: error instanceof Error ? error.message : "Failed to invalidate selected tickets",
         type: "error",
       });
     },
@@ -243,9 +220,7 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
   const avgTicketPrice = tickets?.avgTicketPrice ?? 0;
   const invalidEntries = tickets?.invalidEntries ?? 0;
   const visibleTicketIds = tickets?.data?.map((ticket) => ticket.id) ?? [];
-  const selectedVisibleCount = selected.filter((id) =>
-    visibleTicketIds.includes(id),
-  ).length;
+  const selectedVisibleCount = selected.filter((id) => visibleTicketIds.includes(id)).length;
   const allVisibleSelected =
     visibleTicketIds.length > 0 && selectedVisibleCount === visibleTicketIds.length;
 
@@ -253,9 +228,7 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
     <div className="space-y-6">
       <section className="space-y-2">
         <div className="space-y-1">
-          <h1 className="text-2xl font-bold tracking-tight">
-            {tickets?.title}
-          </h1>
+          <h1 className="text-2xl font-bold tracking-tight">{tickets?.title}</h1>
           <p className="text-sm text-muted-foreground">
             {tickets?.startDate
               ? `${new Date(tickets.startDate).toLocaleDateString(undefined, {
@@ -328,9 +301,7 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
         <div>
           <section>
             {tickets?.data?.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No tickets sold yet.
-              </p>
+              <p className="text-sm text-muted-foreground">No tickets sold yet.</p>
             ) : (
               <div className="overflow-x-auto">
                 <Table>
@@ -361,12 +332,8 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
                           className="cursor-pointer"
                         />
                       </TableHead>
-                      <TableHead className="py-3 pr-4 font-medium">
-                        Ticket
-                      </TableHead>
-                      <TableHead className="py-3 pr-4 font-medium">
-                        Buyer
-                      </TableHead>
+                      <TableHead className="py-3 pr-4 font-medium">Ticket</TableHead>
+                      <TableHead className="py-3 pr-4 font-medium">Buyer</TableHead>
                       <TableHead className="py-3 pr-4 font-medium">
                         <button
                           type="button"
@@ -385,9 +352,7 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
                           Qty{sortSuffix("qty")}
                         </button>
                       </TableHead>
-                      <TableHead className="py-3 pr-4 font-medium">
-                        Unit Price
-                      </TableHead>
+                      <TableHead className="py-3 pr-4 font-medium">Unit Price</TableHead>
                       <TableHead className="py-3 pr-4 font-medium">
                         <button
                           type="button"
@@ -423,8 +388,7 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
                                 variant="outline"
                                 size="icon-sm"
                                 disabled={
-                                  selectedVisibleCount === 0 ||
-                                  bulkInvalidateMutation.isPending
+                                  selectedVisibleCount === 0 || bulkInvalidateMutation.isPending
                                 }
                               >
                                 <MoreVertical />
@@ -435,9 +399,7 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
                             <MenuItem
                               onClick={() => {
                                 if (selectedVisibleCount === 0) return;
-                                const ids = selected.filter((id) =>
-                                  visibleTicketIds.includes(id),
-                                );
+                                const ids = selected.filter((id) => visibleTicketIds.includes(id));
                                 void bulkInvalidateMutation.mutateAsync(ids);
                               }}
                             >
@@ -451,16 +413,10 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
                   </TableHeader>
                   <TableBody>
                     {tickets?.data?.map((ticket) => {
-                      const buyer =
-                        ticket.user?.name ??
-                        ticket.user?.email ??
-                        "Guest checkout";
+                      const buyer = ticket.user?.name ?? ticket.user?.email ?? "Guest checkout";
 
                       return (
-                        <TableRow
-                          key={ticket.id}
-                          className="border-b last:border-0"
-                        >
+                        <TableRow key={ticket.id} className="border-b last:border-0">
                           <TableCell className="py-3 pr-2">
                             <Checkbox
                               checked={selected.includes(ticket.id)}
@@ -485,12 +441,8 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
                             </Tooltip>
                           </TableCell>
                           <TableCell className="py-3 pr-4">{buyer}</TableCell>
-                          <TableCell className="py-3 pr-4">
-                            {ticket.tierName}
-                          </TableCell>
-                          <TableCell className="py-3 pr-4">
-                            {ticket.qty}
-                          </TableCell>
+                          <TableCell className="py-3 pr-4">{ticket.tierName}</TableCell>
+                          <TableCell className="py-3 pr-4">{ticket.qty}</TableCell>
                           <TableCell className="py-3 pr-4">
                             {formatMinorMoney(ticket.unitPrice)}
                           </TableCell>
@@ -498,10 +450,7 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
                             {formatMinorMoney(ticket.qty * ticket.unitPrice)}
                           </TableCell>
                           <TableCell className="py-3 pr-4">
-                            <Badge
-                              variant={ticket.valid ? "success" : "destructive"}
-                              size="sm"
-                            >
+                            <Badge variant={ticket.valid ? "success" : "destructive"} size="sm">
                               {ticket.valid ? "Valid" : "Invalid"}
                             </Badge>
                           </TableCell>
@@ -545,9 +494,7 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
             )}
           </section>
           <div className="h-fit w-full flex justify-between items-center my-2">
-            <p className="text-sm text-muted-foreground">
-              Total pages: {tickets?.totalPages}
-            </p>
+            <p className="text-sm text-muted-foreground">Total pages: {tickets?.totalPages}</p>
             <div>
               <Pagination className="w-fit">
                 <PaginationContent>

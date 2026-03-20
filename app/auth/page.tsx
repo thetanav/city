@@ -1,13 +1,7 @@
 import { Suspense } from "react";
 
 import SignIn from "@/components/auth/sign-in";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function Page() {
   return (
@@ -21,11 +15,8 @@ export default function Page() {
         </CardHeader>
         <CardContent>
           <Suspense
-            fallback={
-              <div className="text-sm text-muted-foreground">
-                Loading sign-in flow...
-              </div>
-            }>
+            fallback={<div className="text-sm text-muted-foreground">Loading sign-in flow...</div>}
+          >
             <SignIn />
           </Suspense>
         </CardContent>

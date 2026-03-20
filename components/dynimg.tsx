@@ -24,12 +24,14 @@ export default function DynamicImg({
       className={cn(
         "relative flex items-center justify-center overflow-hidden select-none",
         className,
-      )}>
+      )}
+    >
       <div
         className={cn(
           "pointer-events-none absolute inset-0 z-0 flex items-center justify-center bg-muted/25 transition-opacity",
           !isLoading && "opacity-0",
-        )}>
+        )}
+      >
         <Loader className="size-4 animate-spin opacity-60" />
       </div>
       <img

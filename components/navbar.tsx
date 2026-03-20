@@ -33,42 +33,42 @@ export const Navbar = async () => {
           <div className="flex min-w-0 items-center gap-6">
             <Link
               href={session?.user ? "/home" : "/"}
-              className="flex items-center gap-2 font-semibold text-foreground">
+              className="flex items-center gap-2 font-semibold text-foreground"
+            >
               <Logo className="h-4 fill-current" />
-              <span>City</span>
             </Link>
 
-            <nav className="hidden items-center gap-1 sm:flex">
+            <nav className="hidden items-center gap-3 sm:flex">
               {navLinks.map((link) => (
                 <Link
                   key={link.href}
                   href={link.href}
-                  className="rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
+                  className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+                >
                   {link.label}
                 </Link>
               ))}
             </nav>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
             <ModeToggle />
             {session?.user ? (
               <>
-                <Button
-                  className="hidden sm:inline-flex"
-                  render={<Link href="/events/new" />}
-                  size="sm"
-                  variant="outline">
-                  <Plus className="size-4" />
-                  Create event
+                <Button className="hidden sm:inline-flex" asChild variant="outline">
+                  <Link href="/events/new">
+                    <Plus className="size-4" />
+                    Create event
+                  </Link>
                 </Button>
                 <Link
                   href="/settings"
-                  className="flex size-9 items-center justify-center overflow-hidden rounded-md border bg-muted text-sm font-medium">
+                  className="flex h-full items-center justify-center overflow-hidden rounded-lg border bg-muted text-sm font-medium"
+                >
                   {session.user.image ? (
                     <DynamicImg
                       alt={`${session.user.name ?? "Profile"} avatar`}
-                      className="size-full"
+                      className="size-8"
                       src={session.user.image}
                     />
                   ) : (
@@ -77,8 +77,8 @@ export const Navbar = async () => {
                 </Link>
               </>
             ) : (
-              <Button render={<Link href="/auth" />} size="sm">
-                Sign in
+              <Button asChild size="sm">
+                <Link href="/auth">Sign in</Link>
               </Button>
             )}
           </div>
@@ -89,7 +89,8 @@ export const Navbar = async () => {
             <Link
               key={link.href}
               href={link.href}
-              className="rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
+              className="rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
               {link.label}
             </Link>
           ))}

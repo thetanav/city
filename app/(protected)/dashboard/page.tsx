@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { ArrowRight, CalendarDays, Plus, Ticket } from "lucide-react";
 import { headers } from "next/headers";
+import { desc, eq, sql } from "drizzle-orm";
 
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { db, schema } from "@/db";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -36,21 +37,24 @@ export default async function DashboardPage() {
 
   if (!session) return null;
 
-  const events = await prisma.event.findMany({
-    where: {
-      creatorId: session.user.id,
-    },
-    include: {
-      _count: {
-        select: { tickets: true },
-      },
-    },
-    orderBy: {
-      startDate: "desc",
-    },
-  });
+  const events = await db
+    .select({
+      id: schema.event.id,
+      title: schema.event.title,
+      slug: schema.event.slug,
+      location: schema.event.location,
+      startDate: schema.event.startDate,
+      totalTickets: schema.event.totalTickets,
+      status: schema.event.status,
+      ticketCount: sql<number>`count(${schema.ticket.id})`,
+    })
+    .from(schema.event)
+    .leftJoin(schema.ticket, eq(schema.ticket.eventId, schema.event.id))
+    .where(eq(schema.event.creatorId, session.user.id))
+    .groupBy(schema.event.id)
+    .orderBy(desc(schema.event.startDate));
 
-  const soldTickets = events.reduce((sum, event) => sum + event._count.tickets, 0);
+  const soldTickets = events.reduce((sum, event) => sum + event.ticketCount, 0);
   const liveEvents = events.filter((event) => event.status === "LIVE").length;
 
   return (
@@ -59,13 +63,13 @@ export default async function DashboardPage() {
         <CardHeader className="gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div className="space-y-2">
             <CardTitle className="text-3xl">Organizer dashboard</CardTitle>
-            <CardDescription>
-              Review your events and ticket sales in one place.
-            </CardDescription>
+            <CardDescription>Review your events and ticket sales in one place.</CardDescription>
           </div>
-          <Button render={<Link href="/events/new" />}>
-            <Plus className="size-4" />
-            Create event
+          <Button asChild>
+            <Link href="/events/new">
+              <Plus className="size-4" />
+              Create event
+            </Link>
           </Button>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-3">
@@ -93,41 +97,43 @@ export default async function DashboardPage() {
                 Create your first event to start tracking sales and attendees.
               </p>
             </div>
-            <Button render={<Link href="/events/new" />}>
-              Create your first event
+            <Button asChild>
+              <Link href="/events/new">Create your first event</Link>
             </Button>
           </CardContent>
         </Card>
       ) : (
         <section className="grid gap-4 lg:grid-cols-2">
           {events.map((event) => (
-            <Card key={event.id} render={<Link href={`/dashboard/${event.slug}`} />}>
-              <CardHeader className="space-y-3">
-                <Badge variant={statusVariant(event.status)} className="w-fit">
-                  {event.status.toLowerCase()}
-                </Badge>
-                <div className="space-y-1">
-                  <CardTitle className="text-2xl">{event.title}</CardTitle>
-                  <CardDescription>{event.location}</CardDescription>
-                </div>
-              </CardHeader>
-              <CardContent className="grid gap-2 text-sm text-muted-foreground">
-                <div className="flex items-center gap-2">
-                  <CalendarDays className="size-4" />
-                  <span>{formatDate(new Date(event.startDate))}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Ticket className="size-4" />
-                  <span>
-                    {event._count.tickets} sold of {event.totalTickets}
-                  </span>
-                </div>
-              </CardContent>
-              <CardFooter className="text-sm font-medium">
-                View details
-                <ArrowRight className="size-4" />
-              </CardFooter>
-            </Card>
+            <Link key={event.id} href={`/dashboard/${event.slug}`}>
+              <Card>
+                <CardHeader className="space-y-3">
+                  <Badge variant={statusVariant(event.status)} className="w-fit">
+                    {event.status.toLowerCase()}
+                  </Badge>
+                  <div className="space-y-1">
+                    <CardTitle className="text-2xl">{event.title}</CardTitle>
+                    <CardDescription>{event.location}</CardDescription>
+                  </div>
+                </CardHeader>
+                <CardContent className="grid gap-2 text-sm text-muted-foreground">
+                  <div className="flex items-center gap-2">
+                    <CalendarDays className="size-4" />
+                    <span>{formatDate(new Date(event.startDate))}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Ticket className="size-4" />
+                    <span>
+                      {event.ticketCount} sold of {event.totalTickets}
+                    </span>
+                  </div>
+                </CardContent>
+                <CardFooter className="text-sm font-medium">
+                  View details
+                  <ArrowRight className="size-4" />
+                </CardFooter>
+              </Card>
+            </Link>
           ))}
         </section>
       )}

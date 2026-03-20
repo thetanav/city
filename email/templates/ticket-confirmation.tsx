@@ -62,9 +62,7 @@ export function TicketConfirmationEmail({
             <tr>
               <td style={{ padding: "24px", borderBottom: "1px solid #e5e7eb" }}>
                 <h1 style={{ margin: 0, fontSize: 22 }}>Ticket confirmed</h1>
-                <p style={{ margin: "8px 0 0", color: "#4b5563", fontSize: 14 }}>
-                  {eventTitle}
-                </p>
+                <p style={{ margin: "8px 0 0", color: "#4b5563", fontSize: 14 }}>{eventTitle}</p>
               </td>
             </tr>
             <tr>
@@ -101,13 +99,34 @@ export function TicketConfirmationEmail({
                 >
                   <thead>
                     <tr style={{ backgroundColor: "#f9fafb" }}>
-                      <th style={{ padding: "10px 12px", textAlign: "left", fontSize: 12, color: "#6b7280" }}>
+                      <th
+                        style={{
+                          padding: "10px 12px",
+                          textAlign: "left",
+                          fontSize: 12,
+                          color: "#6b7280",
+                        }}
+                      >
                         Ticket
                       </th>
-                      <th style={{ padding: "10px 12px", textAlign: "center", fontSize: 12, color: "#6b7280" }}>
+                      <th
+                        style={{
+                          padding: "10px 12px",
+                          textAlign: "center",
+                          fontSize: 12,
+                          color: "#6b7280",
+                        }}
+                      >
                         Qty
                       </th>
-                      <th style={{ padding: "10px 12px", textAlign: "right", fontSize: 12, color: "#6b7280" }}>
+                      <th
+                        style={{
+                          padding: "10px 12px",
+                          textAlign: "right",
+                          fontSize: 12,
+                          color: "#6b7280",
+                        }}
+                      >
                         Amount
                       </th>
                     </tr>
@@ -115,7 +134,13 @@ export function TicketConfirmationEmail({
                   <tbody>
                     {tickets.map((ticket, index) => (
                       <tr key={`${ticket.tierName}-${index}`}>
-                        <td style={{ padding: "10px 12px", borderTop: "1px solid #e5e7eb", fontSize: 13 }}>
+                        <td
+                          style={{
+                            padding: "10px 12px",
+                            borderTop: "1px solid #e5e7eb",
+                            fontSize: 13,
+                          }}
+                        >
                           {ticket.tierName}
                         </td>
                         <td
@@ -141,7 +166,10 @@ export function TicketConfirmationEmail({
                       </tr>
                     ))}
                     <tr>
-                      <td style={{ padding: "12px", borderTop: "1px solid #e5e7eb", fontWeight: 600 }} colSpan={2}>
+                      <td
+                        style={{ padding: "12px", borderTop: "1px solid #e5e7eb", fontWeight: 600 }}
+                        colSpan={2}
+                      >
                         Total
                       </td>
                       <td

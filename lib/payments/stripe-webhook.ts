@@ -7,11 +7,7 @@ import { stripeClient } from "@/lib/stripe";
 type WebhookLogger = Pick<Console, "log" | "error" | "warn">;
 
 type StripeWebhookDeps = {
-  constructEvent: (
-    payload: string,
-    signature: string,
-    secret: string,
-  ) => Stripe.Event;
+  constructEvent: (payload: string, signature: string, secret: string) => Stripe.Event;
   createTickets: typeof createTicketsFromSession;
   webhookSecret: string | undefined;
   logger: WebhookLogger;
@@ -35,10 +31,7 @@ export async function handleStripeWebhookRequest(
 ) {
   if (!deps.webhookSecret) {
     deps.logger.error("[webhook] STRIPE_WEBHOOK_SECRET is not configured");
-    return NextResponse.json(
-      { message: "Webhook secret not configured" },
-      { status: 500 },
-    );
+    return NextResponse.json({ message: "Webhook secret not configured" }, { status: 500 });
   }
 
   const signature = request.headers.get("stripe-signature");
@@ -52,10 +45,7 @@ export async function handleStripeWebhookRequest(
   try {
     event = deps.constructEvent(rawBody, signature, deps.webhookSecret);
   } catch {
-    return NextResponse.json(
-      { message: "Invalid signature" },
-      { status: 400 },
-    );
+    return NextResponse.json({ message: "Invalid signature" }, { status: 400 });
   }
 
   if (!processableEvents.has(event.type)) {
@@ -78,23 +68,15 @@ export async function handleStripeWebhookRequest(
         `[webhook] Tickets created for payment ${session.payment_intent}: ${result.createdTickets.length} ticket(s)`,
       );
     } else if (result.status === "skipped") {
-      deps.logger.log(
-        `[webhook] Duplicate webhook for payment ${session.payment_intent}, skipped`,
-      );
+      deps.logger.log(`[webhook] Duplicate webhook for payment ${session.payment_intent}, skipped`);
     } else {
       deps.logger.warn(
         `[webhook] Ticket creation returned "${result.status}" for payment ${session.payment_intent}`,
       );
     }
   } catch (err) {
-    deps.logger.error(
-      `[webhook] Failed to process ${event.type} for ${session.id}:`,
-      err,
-    );
-    return NextResponse.json(
-      { message: "Ticket creation failed" },
-      { status: 500 },
-    );
+    deps.logger.error(`[webhook] Failed to process ${event.type} for ${session.id}:`, err);
+    return NextResponse.json({ message: "Ticket creation failed" }, { status: 500 });
   }
 
   return NextResponse.json({ received: true });

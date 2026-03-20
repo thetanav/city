@@ -58,12 +58,8 @@ export default function TimeForm({
   onEndAtChange,
   onHasEndDateChange,
 }: TimeFormProps) {
-  const [startDate, setStartDate] = useState<Date | undefined>(() =>
-    parseDate(startAt),
-  );
-  const [endDate, setEndDate] = useState<Date | undefined>(() =>
-    parseDate(endAt),
-  );
+  const [startDate, setStartDate] = useState<Date | undefined>(() => parseDate(startAt));
+  const [endDate, setEndDate] = useState<Date | undefined>(() => parseDate(endAt));
   const [startTime, setStartTime] = useState(() => extractTime(startAt));
   const [endTime, setEndTime] = useState(() => extractTime(endAt));
   const [hasTime, setHasTime] = useState(false);
@@ -83,10 +79,7 @@ export default function TimeForm({
       <div className="flex flex-1 flex-col gap-2">
         <div className="flex gap-2">
           <Popover>
-            <PopoverTrigger
-              render={
-                <Button className="flex-1 justify-start" variant="outline" />
-              }>
+            <PopoverTrigger render={<Button className="flex-1 justify-start" variant="outline" />}>
               <CalendarIcon aria-hidden="true" />
               {startDate ? startDate.toDateString() : "Pick a date"}
             </PopoverTrigger>
@@ -124,13 +117,9 @@ export default function TimeForm({
             className="flex-1 appearance-none bg-background [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-calendar-picker-indicator]:appearance-none"
           />
         </div>
-        <div
-          className={`flex gap-2 ${!hasEndDate && "pointer-events-none opacity-50"}`}>
+        <div className={`flex gap-2 ${!hasEndDate && "pointer-events-none opacity-50"}`}>
           <Popover>
-            <PopoverTrigger
-              render={
-                <Button className="flex-1 justify-start" variant="outline" />
-              }>
+            <PopoverTrigger render={<Button className="flex-1 justify-start" variant="outline" />}>
               <CalendarIcon aria-hidden="true" />
               {endDate ? endDate.toDateString() : "Pick a date"}
             </PopoverTrigger>
