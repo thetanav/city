@@ -1,5 +1,5 @@
 import { treaty } from "@elysiajs/eden";
-import type { app } from "@/server/api/app";
+import type { app } from "@/server/app";
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 

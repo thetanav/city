@@ -14,5 +14,6 @@ const logger = pino({
 
 export const emailLogger = logger.child({ module: "email" });
 export const stripeLogger = logger.child({ module: "stripe" });
+// TODO: Set it as default logger for elysia
 export const serverLogger = logger.child({ module: "server" });
 export const nextLogger = logger.child({ module: "nextjs" });
