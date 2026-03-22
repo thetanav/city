@@ -1,7 +1,14 @@
 "use client";
 
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { ArrowLeft, ArrowRight, Calendar, MapPin, Search, X } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Calendar,
+  MapPin,
+  Search,
+  X,
+} from "lucide-react";
 import Link from "next/link";
 import { useDeferredValue, useState } from "react";
 
@@ -110,7 +117,9 @@ export default function ExplorePage() {
                 <ArrowLeft className="size-4" />
                 Prev
               </Button>
-              <span className="text-sm text-muted-foreground">Page {page + 1}</span>
+              <span className="text-sm text-muted-foreground">
+                Page {page + 1}
+              </span>
               <Button
                 disabled={!events?.nextPage}
                 onClick={() => setPage((current) => current + 1)}
@@ -162,16 +171,9 @@ export default function ExplorePage() {
 
 function LoadingGrid() {
   return (
-    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+    <div className="grid gap-2 grid-cols-3">
       {Array.from({ length: 6 }).map((_, index) => (
-        <Card key={index}>
-          <Skeleton className="aspect-[4/5] w-full rounded-t-2xl rounded-b-none" />
-          <CardContent className="space-y-3 pt-6">
-            <Skeleton className="h-5 w-24" />
-            <Skeleton className="h-8 w-full" />
-            <Skeleton className="h-4 w-2/3" />
-          </CardContent>
-        </Card>
+        <Skeleton className="aspect-video w-full rounded-xl" key={index} />
       ))}
     </div>
   );
@@ -180,42 +182,41 @@ function LoadingGrid() {
 function EventCard({ event }: { event: ExploreEvent }) {
   const dateText = formatShortDate(event.startDate);
   const cityText = event.city || event.location;
-  const label = event.genre[0] ?? "Live event";
 
   return (
-    <Link href={`/e/e${event.slug}`}>
-      <Card>
-        <div className="">
-          {event.posterImage ? (
-            <DynamicImg
-              alt={`${event.title} poster`}
-              className="aspect-video w-full"
-              src={event.posterImage}
-            />
-          ) : (
-            <div className="flex aspect-video items-center justify-center">
-              <Calendar className="size-10 text-muted-foreground" />
-            </div>
-          )}
-        </div>
+    <Link
+      href={`/e/${event.slug}`}
+      className="bg-card border rounded-xl overflow-clip"
+    >
+      <div className="">
+        {event.posterImage ? (
+          <DynamicImg
+            alt={`${event.title} poster`}
+            className="aspect-video w-full"
+            src={event.posterImage}
+          />
+        ) : (
+          <div className="flex aspect-video items-center justify-center">
+            <Calendar className="size-10 text-muted-foreground" />
+          </div>
+        )}
+      </div>
 
-        <CardHeader>
+      <div className="flex flex-col gap-1/2 px-2 py-2">
+        <div className="flex gap-2">
           <Badge variant="secondary" className="w-fit">
             {event.status}
           </Badge>
           <div>
             <p className="text-sm text-muted-foreground">{dateText}</p>
-            <CardTitle className="text-lg">{event.title}</CardTitle>
           </div>
-        </CardHeader>
-
-        <CardContent className="text-sm text-muted-foreground -mt-3">
-          <div className="flex items-center gap-2">
-            <MapPin className="size-4" />
-            <span className="line-clamp-1">{cityText}</span>
-          </div>
-        </CardContent>
-      </Card>
+        </div>
+        <h1 className="text-lg">{event.title}</h1>
+        <div className="flex items-center gap-1 opacity-65">
+          <MapPin className="size-4" />
+          <span className="line-clamp-1">{cityText}</span>
+        </div>
+      </div>
     </Link>
   );
 }

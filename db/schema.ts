@@ -10,8 +10,13 @@ import {
   timestamp,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
+import { Currency } from "lucide-react";
 
-export const eventStatusEnum = pgEnum("EventStatus", ["DRAFT", "LIVE", "STOPPED"]);
+export const eventStatusEnum = pgEnum("EventStatus", [
+  "DRAFT",
+  "LIVE",
+  "STOPPED",
+]);
 
 export const user = pgTable(
   "user",
@@ -22,7 +27,9 @@ export const user = pgTable(
     emailVerified: boolean("emailVerified").notNull().default(false),
     image: text("image"),
     stripeCustomerId: text("stripeCustomerId"),
-    createdAt: timestamp("createdAt", { withTimezone: false }).notNull().defaultNow(),
+    createdAt: timestamp("createdAt", { withTimezone: false })
+      .notNull()
+      .defaultNow(),
     updatedAt: timestamp("updatedAt", { withTimezone: false }).notNull(),
   },
   (table) => [uniqueIndex("user_email_key").on(table.email)],
@@ -32,9 +39,8 @@ export const event = pgTable(
   "event",
   {
     id: text("id").primaryKey(),
-    posterImage: text("posterImage"),
+    image: text("image").array(),
     title: text("title").notNull(),
-    tagline: text("tagline"),
     description: text("description").notNull(),
     slug: text("slug").notNull(),
     startDate: timestamp("startDate", { withTimezone: false }).notNull(),
@@ -42,15 +48,17 @@ export const event = pgTable(
     location: text("location").notNull(),
     city: text("city"),
     contactEmail: text("contactEmail"),
-    prices: jsonb("prices"),
+    prices: jsonb("prices"), // { tierName: string, unitPrice: number, note: string }
     totalTickets: integer("totalTickets").notNull(),
     bookedTickets: integer("bookedTickets").notNull().default(0),
-    genre: text("genre")
-      .array()
-      .notNull()
-      .default(sql`ARRAY[]::text[]`),
+    genre: text("genre").array(),
+    languages: text("languages").array(),
+    currency: text("currency"),
+
     creatorId: text("creatorId"),
-    createdAt: timestamp("createdAt", { withTimezone: false }).notNull().defaultNow(),
+    createdAt: timestamp("createdAt", { withTimezone: false })
+      .notNull()
+      .defaultNow(),
     updatedAt: timestamp("updatedAt", { withTimezone: false }).notNull(),
     status: eventStatusEnum("status").notNull().default("DRAFT"),
   },
@@ -73,7 +81,9 @@ export const ticket = pgTable(
       .notNull()
       .references(() => event.id, { onDelete: "cascade" }),
     userId: text("userId").references(() => user.id, { onDelete: "set null" }),
-    createdAt: timestamp("createdAt", { withTimezone: false }).notNull().defaultNow(),
+    createdAt: timestamp("createdAt", { withTimezone: false })
+      .notNull()
+      .defaultNow(),
     updatedAt: timestamp("updatedAt", { withTimezone: false }).notNull(),
     valid: boolean("valid").notNull().default(true),
   },
@@ -90,7 +100,9 @@ export const session = pgTable(
     id: text("id").primaryKey(),
     expiresAt: timestamp("expiresAt", { withTimezone: false }).notNull(),
     token: text("token").notNull(),
-    createdAt: timestamp("createdAt", { withTimezone: false }).notNull().defaultNow(),
+    createdAt: timestamp("createdAt", { withTimezone: false })
+      .notNull()
+      .defaultNow(),
     updatedAt: timestamp("updatedAt", { withTimezone: false }).notNull(),
     ipAddress: text("ipAddress"),
     userAgent: text("userAgent"),
@@ -124,11 +136,16 @@ export const account = pgTable(
     }),
     scope: text("scope"),
     password: text("password"),
-    createdAt: timestamp("createdAt", { withTimezone: false }).notNull().defaultNow(),
+    createdAt: timestamp("createdAt", { withTimezone: false })
+      .notNull()
+      .defaultNow(),
     updatedAt: timestamp("updatedAt", { withTimezone: false }).notNull(),
   },
   (table) => [
-    uniqueIndex("account_providerId_accountId_key").on(table.providerId, table.accountId),
+    uniqueIndex("account_providerId_accountId_key").on(
+      table.providerId,
+      table.accountId,
+    ),
     index("account_userId_idx").on(table.userId),
   ],
 );
@@ -140,11 +157,16 @@ export const verification = pgTable(
     identifier: text("identifier").notNull(),
     value: text("value").notNull(),
     expiresAt: timestamp("expiresAt", { withTimezone: false }).notNull(),
-    createdAt: timestamp("createdAt", { withTimezone: false }).notNull().defaultNow(),
+    createdAt: timestamp("createdAt", { withTimezone: false })
+      .notNull()
+      .defaultNow(),
     updatedAt: timestamp("updatedAt", { withTimezone: false }).notNull(),
   },
   (table) => [
-    uniqueIndex("verification_identifier_value_key").on(table.identifier, table.value),
+    uniqueIndex("verification_identifier_value_key").on(
+      table.identifier,
+      table.value,
+    ),
     index("verification_identifier_idx").on(table.identifier),
   ],
 );
