@@ -8,6 +8,13 @@
       "when": 1774035019830,
       "tag": "0000_nifty_sunset_bain",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1780416646747,
+      "tag": "0001_awesome_living_tribunal",
+      "breakpoints": true
     }
   ]
 }

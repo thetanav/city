@@ -56,7 +56,9 @@ const eventCreateSchema = t.Object({
   city: t.Optional(t.String()),
   contactEmail: t.Optional(t.String()),
   posterImage: t.Optional(t.String()),
-  status: t.Optional(t.Union([t.Literal("DRAFT"), t.Literal("LIVE"), t.Literal("STOPPED")])),
+  status: t.Optional(
+    t.Union([t.Literal("DRAFT"), t.Literal("LIVE"), t.Literal("STOPPED")]),
+  ),
   prices: t.Array(tierSchema),
   totalTickets: t.Optional(t.Number()),
   genre: t.Optional(t.Array(t.String())),
@@ -73,7 +75,9 @@ const eventUpdateSchema = t.Object({
   city: t.Optional(t.String()),
   contactEmail: t.Optional(t.String()),
   posterImage: t.Optional(t.String()),
-  status: t.Optional(t.Union([t.Literal("DRAFT"), t.Literal("LIVE"), t.Literal("STOPPED")])),
+  status: t.Optional(
+    t.Union([t.Literal("DRAFT"), t.Literal("LIVE"), t.Literal("STOPPED")]),
+  ),
   prices: t.Optional(t.Array(tierSchema)),
   totalTickets: t.Optional(t.Number()),
   genre: t.Optional(t.Array(t.String())),
@@ -127,7 +131,8 @@ export const eventsRoutes = new Elysia({ prefix: "/events" })
         return { ok: false, message: "At least one price tier is required" };
       }
 
-      const totalTickets = body.totalTickets ?? totalSeatsFromPrices(body.prices);
+      const totalTickets =
+        body.totalTickets ?? totalSeatsFromPrices(body.prices);
 
       try {
         const [event] = await db
@@ -208,11 +213,14 @@ export const eventsRoutes = new Elysia({ prefix: "/events" })
 
       if (body.title !== undefined) updateData.title = body.title;
       if (body.tagline !== undefined) updateData.tagline = body.tagline;
-      if (body.description !== undefined) updateData.description = body.description;
+      if (body.description !== undefined)
+        updateData.description = body.description;
       if (body.location !== undefined) updateData.location = body.location;
       if (body.city !== undefined) updateData.city = body.city;
-      if (body.contactEmail !== undefined) updateData.contactEmail = body.contactEmail;
-      if (body.posterImage !== undefined) updateData.posterImage = body.posterImage;
+      if (body.contactEmail !== undefined)
+        updateData.contactEmail = body.contactEmail;
+      if (body.posterImage !== undefined)
+        updateData.posterImage = body.posterImage;
       if (body.status !== undefined) updateData.status = body.status;
       if (body.genre !== undefined) updateData.genre = body.genre;
 
@@ -233,8 +241,11 @@ export const eventsRoutes = new Elysia({ prefix: "/events" })
       }
 
       const nextStartDate =
-        updateData.startDate instanceof Date ? updateData.startDate : event.startDate;
-      const nextEndDate = updateData.endDate instanceof Date ? updateData.endDate : event.endDate;
+        updateData.startDate instanceof Date
+          ? updateData.startDate
+          : event.startDate;
+      const nextEndDate =
+        updateData.endDate instanceof Date ? updateData.endDate : event.endDate;
 
       if (nextStartDate >= nextEndDate) {
         return { ok: false, message: "End date must be after start date" };
@@ -250,7 +261,8 @@ export const eventsRoutes = new Elysia({ prefix: "/events" })
 
       if (body.prices !== undefined) {
         updateData.prices = body.prices;
-        updateData.totalTickets = body.totalTickets ?? totalSeatsFromPrices(body.prices);
+        updateData.totalTickets =
+          body.totalTickets ?? totalSeatsFromPrices(body.prices);
       } else if (body.totalTickets !== undefined) {
         updateData.totalTickets = body.totalTickets;
       }
@@ -327,7 +339,9 @@ export const eventsRoutes = new Elysia({ prefix: "/events" })
       )
       .groupBy(schema.ticket.eventId);
 
-    const soldMap = new Map(soldByEvent.map((entry) => [entry.eventId, entry.soldQty]));
+    const soldMap = new Map(
+      soldByEvent.map((entry) => [entry.eventId, entry.soldQty]),
+    );
 
     return {
       ok: true,
@@ -492,7 +506,8 @@ export const eventsRoutes = new Elysia({ prefix: "/events" })
       const soldCount = eventStats?.soldCount ?? 0;
       const grossRevenue = eventStats?.grossRevenue ?? 0;
       const remaining = Math.max(event.totalTickets - soldCount, 0);
-      const soldPercent = event.totalTickets > 0 ? (soldCount / event.totalTickets) * 100 : 0;
+      const soldPercent =
+        event.totalTickets > 0 ? (soldCount / event.totalTickets) * 100 : 0;
       const avgTicketPrice = soldCount > 0 ? grossRevenue / soldCount : 0;
       const invalidEntries = eventStats?.invalidEntries ?? 0;
 
@@ -528,13 +543,17 @@ export const eventsRoutes = new Elysia({ prefix: "/events" })
             t.Literal("status"),
             t.Literal("tier"),
           ]),
-          order: t.Union([t.Literal("asc"), t.Literal("desc"), t.Literal("dsc")]),
+          order: t.Union([
+            t.Literal("asc"),
+            t.Literal("desc"),
+            t.Literal("dsc"),
+          ]),
         }),
       }),
       params: t.Object({ slug: t.String() }),
     },
   )
-  .use(rateLimit())
+  // .use(rateLimit())
   .get(
     "/",
     async ({ query }) => {
@@ -543,7 +562,9 @@ export const eventsRoutes = new Elysia({ prefix: "/events" })
         // status: "LIVE" as const,
       };
 
-      const whereClause = where.title ? ilike(schema.event.title, where.title) : undefined;
+      const whereClause = where.title
+        ? ilike(schema.event.title, where.title)
+        : undefined;
 
       const [{ count: totalCount }] = await db
         .select({ count: sql<number>`count(*)` })
